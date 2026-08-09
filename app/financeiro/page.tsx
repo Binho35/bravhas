@@ -12,6 +12,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 
+import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
+
 import { financialAccounts as mockFinancialAccounts } from "@/modules/financial/mocks/financialAccounts";
 
 import {
@@ -302,7 +304,11 @@ export default function FinanceiroPage() {
     );
 
   return (
-    <AppShell
+    <PermissionGuard
+      resource="FINANCIAL"
+      action="VIEW"
+    >
+      <AppShell
       sidebar={<Sidebar />}
       header={<Header />}
     >
@@ -785,6 +791,7 @@ export default function FinanceiroPage() {
           </div>
         </section>
       </div>
-    </AppShell>
+      </AppShell>
+    </PermissionGuard>
   );
 }

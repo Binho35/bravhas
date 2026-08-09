@@ -1,116 +1,295 @@
 "use client";
 
+import type {
+  ElementType,
+} from "react";
+
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import {
-  LayoutDashboard,
-  ClipboardList,
+  usePathname,
+} from "next/navigation";
+
+import {
+  BarChart3,
+  Briefcase,
   CalendarDays,
-  Wallet,
+  ClipboardList,
+  FileText,
+  LayoutDashboard,
   TrendingUp,
   Users,
-  Briefcase,
-  BarChart3,
-  FileText,
+  Wallet,
 } from "lucide-react";
+
+import {
+  usePermission,
+} from "@/modules/auth/hooks/usePermission";
 
 interface MenuItem {
   label: string;
+
   href: string;
-  icon: React.ElementType;
+
+  icon: ElementType;
+
+  allowed: boolean;
 }
 
 interface MenuSection {
   title: string;
+
   items: MenuItem[];
 }
-
-const sections: MenuSection[] = [
-  {
-    title: "CENTRO",
-    items: [
-      {
-        label: "Centro de Controle",
-        href: "/",
-        icon: LayoutDashboard,
-      },
-    ],
-  },
-
-  {
-    title: "OPERAÇÃO",
-    items: [
-      {
-        label: "Pendências",
-        href: "/obrigacoes",
-        icon: ClipboardList,
-      },
-      {
-        label: "Obrigações",
-        href: "/obrigacoes",
-        icon: ClipboardList,
-      },
-      {
-        label: "Agenda",
-        href: "/agenda",
-        icon: CalendarDays,
-      },
-    ],
-  },
-
-  {
-    title: "FINANCEIRO",
-    items: [
-      {
-        label: "Financeiro",
-        href: "/financeiro",
-        icon: Wallet,
-      },
-      {
-        label: "Fluxo de Caixa",
-        href: "/financeiro/fluxo-caixa",
-        icon: TrendingUp,
-      },
-    ],
-  },
-
-  {
-    title: "PESSOAS",
-    items: [
-      {
-        label: "Pessoas",
-        href: "/pessoas",
-        icon: Users,
-      },
-      {
-        label: "Departamento Pessoal",
-        href: "/departamento-pessoal",
-        icon: Briefcase,
-      },
-    ],
-  },
-
-  {
-    title: "GESTÃO",
-    items: [
-      {
-        label: "Indicadores",
-        href: "/indicadores",
-        icon: BarChart3,
-      },
-      {
-        label: "Documentos",
-        href: "/documentos",
-        icon: FileText,
-      },
-    ],
-  },
-];
 
 export function Sidebar() {
   const pathname =
     usePathname();
+
+  const canViewDashboard =
+    usePermission(
+      "DASHBOARD",
+      "VIEW",
+    );
+
+  const canViewObligations =
+    usePermission(
+      "OBLIGATIONS",
+      "VIEW",
+    );
+
+  const canViewAgenda =
+    usePermission(
+      "AGENDA",
+      "VIEW",
+    );
+
+  const canViewFinancial =
+    usePermission(
+      "FINANCIAL",
+      "VIEW",
+    );
+
+  const canViewCashFlow =
+    usePermission(
+      "CASH_FLOW",
+      "VIEW",
+    );
+
+  const canViewPeople =
+    usePermission(
+      "PEOPLE",
+      "VIEW",
+    );
+
+  const canViewPayroll =
+    usePermission(
+      "PAYROLL",
+      "VIEW",
+    );
+
+  const canViewIndicators =
+    usePermission(
+      "INDICATORS",
+      "VIEW",
+    );
+
+  const canViewDocuments =
+    usePermission(
+      "DOCUMENTS",
+      "VIEW",
+    );
+
+  const sections: MenuSection[] = [
+    {
+      title: "CENTRO",
+
+      items: [
+        {
+          label:
+            "Centro de Controle",
+
+          href:
+            "/",
+
+          icon:
+            LayoutDashboard,
+
+          allowed:
+            canViewDashboard,
+        },
+      ],
+    },
+
+    {
+      title: "OPERAÇÃO",
+
+      items: [
+        {
+          label:
+            "Pendências",
+
+          href:
+            "/obrigacoes",
+
+          icon:
+            ClipboardList,
+
+          allowed:
+            canViewObligations,
+        },
+
+        {
+          label:
+            "Obrigações",
+
+          href:
+            "/obrigacoes",
+
+          icon:
+            ClipboardList,
+
+          allowed:
+            canViewObligations,
+        },
+
+        {
+          label:
+            "Agenda",
+
+          href:
+            "/agenda",
+
+          icon:
+            CalendarDays,
+
+          allowed:
+            canViewAgenda,
+        },
+      ],
+    },
+
+    {
+      title: "FINANCEIRO",
+
+      items: [
+        {
+          label:
+            "Financeiro",
+
+          href:
+            "/financeiro",
+
+          icon:
+            Wallet,
+
+          allowed:
+            canViewFinancial,
+        },
+
+        {
+          label:
+            "Fluxo de Caixa",
+
+          href:
+            "/financeiro/fluxo-caixa",
+
+          icon:
+            TrendingUp,
+
+          allowed:
+            canViewCashFlow,
+        },
+      ],
+    },
+
+    {
+      title: "PESSOAS",
+
+      items: [
+        {
+          label:
+            "Pessoas",
+
+          href:
+            "/pessoas",
+
+          icon:
+            Users,
+
+          allowed:
+            canViewPeople,
+        },
+
+        {
+          label:
+            "Departamento Pessoal",
+
+          href:
+            "/departamento-pessoal",
+
+          icon:
+            Briefcase,
+
+          allowed:
+            canViewPayroll,
+        },
+      ],
+    },
+
+    {
+      title: "GESTÃO",
+
+      items: [
+        {
+          label:
+            "Indicadores",
+
+          href:
+            "/indicadores",
+
+          icon:
+            BarChart3,
+
+          allowed:
+            canViewIndicators,
+        },
+
+        {
+          label:
+            "Documentos",
+
+          href:
+            "/documentos",
+
+          icon:
+            FileText,
+
+          allowed:
+            canViewDocuments,
+        },
+      ],
+    },
+  ];
+
+  const visibleSections =
+    sections
+      .map(
+        (section) => ({
+          ...section,
+
+          items:
+            section.items.filter(
+              (item) =>
+                item.allowed,
+            ),
+        }),
+      )
+      .filter(
+        (section) =>
+          section.items.length >
+          0,
+      );
 
   return (
     <div className="flex h-full flex-col bg-[#0B2947] text-white">
@@ -128,14 +307,18 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-auto px-3 py-4">
-        {sections.map(
+        {visibleSections.map(
           (section) => (
             <div
-              key={section.title}
+              key={
+                section.title
+              }
               className="mb-6"
             >
               <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">
-                {section.title}
+                {
+                  section.title
+                }
               </p>
 
               <div className="space-y-1">
@@ -145,8 +328,10 @@ export function Sidebar() {
                       item.href === "/"
                         ? pathname ===
                           "/"
-                        : pathname.startsWith(
-                            item.href,
+                        : pathname ===
+                            item.href ||
+                          pathname.startsWith(
+                            `${item.href}/`,
                           );
 
                     const Icon =
