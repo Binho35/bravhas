@@ -1,0 +1,136 @@
+"use client";
+
+import { useParams, useRouter } from "next/navigation";
+
+import { AppShell } from "@/components/layout/AppShell";
+import { Header } from "@/components/layout/Header";
+import { Sidebar } from "@/components/layout/Sidebar";
+
+import { FinancialActions } from "@/modules/financial/components/FinancialActions";
+import { FinancialDetails } from "@/modules/financial/components/FinancialDetails";
+import { FinancialSummary } from "@/modules/financial/components/FinancialSummary";
+import { HarpiaFinancialCard } from "@/modules/financial/components/HarpiaFinancialCard";
+import { useFinancialAccount } from "@/modules/financial/hooks/useFinancialAccount";
+
+export default function FinancialAccountPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+
+  const {
+    account,
+    loading,
+    notFound,
+    total,
+    remaining,
+    isOverdue,
+    onAccountUpdated,
+  } = useFinancialAccount(params.id);
+
+  if (loading) {
+    return (
+      <AppShell sidebar={<Sidebar />} header={<Header />}>
+        <div className="flex h-full items-center justify-center p-5">
+          <div className="rounded-2xl border border-[#E2E8F0] bg-white px-8 py-7 text-center shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
+              Financeiro
+            </p>
+            <h2 className="mt-2 text-lg font-bold text-[#0B2947]">
+              Carregando ficha financeira...
+            </h2>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (notFound || !account) {
+    return (
+      <AppShell sidebar={<Sidebar />} header={<Header />}>
+        <div className="flex h-full items-center justify-center p-5">
+          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-8 text-center shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
+              Financeiro
+            </p>
+            <h2 className="mt-2 text-lg font-bold text-[#0B2947]">
+              Conta financeira não encontrada
+            </h2>
+            <p className="mt-2 text-sm text-[#64748B]">
+              O lançamento solicitado não está disponível.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/financeiro")}
+              className="mt-5 rounded-xl bg-[#154B7A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#103D65]"
+            >
+              Voltar ao Financeiro
+            </button>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const statusText =
+    account.status === "PAID"
+      ? "Pago"
+      : account.status === "PARTIALLY_PAID"
+        ? "Parcialmente liquidado"
+        : account.status === "CANCELED"
+          ? "Cancelado"
+          : isOverdue
+            ? "Vencido"
+            : "Em aberto";
+
+  return (
+    <AppShell sidebar={<Sidebar />} header={<Header />}>
+      <div className="grid h-full grid-rows-[auto_1fr] gap-4 overflow-hidden p-5">
+        <section className="flex items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
+              Financeiro • Ficha Financeira
+            </p>
+            <h2 className="mt-1 truncate text-2xl font-bold tracking-tight text-[#0B2947]">
+              {account.description}
+            </h2>
+            <p className="mt-1 text-sm text-[#64748B]">
+              {account.type === "PAYABLE" ? "Conta a pagar" : "Conta a receber"} • {statusText}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => router.push("/financeiro")}
+            className="shrink-0 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm font-semibold text-[#475569] transition hover:bg-[#F8FAFC]"
+          >
+            Voltar
+          </button>
+        </section>
+
+        <section className="grid min-h-0 grid-cols-[1.35fr_0.65fr] gap-4">
+          <FinancialDetails account={account} />
+
+          <div className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-4 overflow-auto">
+            <HarpiaFinancialCard
+              accountType={account.type}
+              status={account.status}
+              remaining={remaining}
+            />
+
+            <FinancialSummary
+              account={account}
+              total={total}
+              remaining={remaining}
+            />
+
+            <FinancialActions
+              account={account}
+              total={total}
+              remaining={remaining}
+              onAccountUpdated={onAccountUpdated}
+            />
+          </div>
+        </section>
+      </div>
+    </AppShell>
+  );
+}
