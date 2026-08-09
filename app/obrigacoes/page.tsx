@@ -12,6 +12,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 
+import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
+
 import { obligations as mockObligations } from "@/modules/obligations/mocks/obligations";
 
 import {
@@ -319,7 +321,11 @@ export default function ObligationsPage() {
     );
 
   return (
-    <AppShell
+    <PermissionGuard
+      resource="OBLIGATIONS"
+      action="VIEW"
+    >
+      <AppShell
       sidebar={<Sidebar />}
       header={<Header />}
     >
@@ -645,6 +651,7 @@ export default function ObligationsPage() {
           </div>
         </section>
       </div>
-    </AppShell>
+      </AppShell>
+    </PermissionGuard>
   );
 }
