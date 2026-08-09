@@ -346,6 +346,13 @@ export default function FinanceiroPage() {
             </div>
 
             <Link
+              href="/financeiro/fluxo-caixa"
+              className="flex h-[58px] items-center rounded-xl border border-[#E2E8F0] bg-white px-4 text-sm font-semibold text-[#154B7A] shadow-sm transition hover:border-[#154B7A] hover:bg-[#F8FAFC]"
+            >
+              Fluxo de Caixa
+            </Link>
+
+            <Link
               href="/financeiro/nova"
               className="flex h-[58px] items-center rounded-xl bg-[#154B7A] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#103D65]"
             >

@@ -1,4 +1,7 @@
 import type { StoredFinancialAccount } from "../storage/financialStorage";
+
+import { createFinancialTransaction } from "./createFinancialTransaction";
+
 import { roundCurrency } from "../utils/currency";
 
 export interface ReversePaymentInput {
@@ -28,6 +31,12 @@ export function reversePayment({
   if (account.status === "CANCELED") {
     throw new Error(
       "Não é possível estornar uma conta cancelada.",
+    );
+  }
+
+  if (!reversedBy.trim()) {
+    throw new Error(
+      "O responsável pelo estorno é obrigatório.",
     );
   }
 
@@ -84,8 +93,10 @@ export function reversePayment({
       : "PARTIALLY_PAID";
 
   const now =
-    reversedAt ??
     new Date().toISOString();
+
+  const effectiveReversalDate =
+    reversedAt ?? now;
 
   const updatedAccount: StoredFinancialAccount = {
     ...account,
@@ -102,11 +113,33 @@ export function reversePayment({
         : account.paymentDate,
 
     updatedBy:
-      reversedBy,
+      reversedBy.trim(),
 
     updatedAt:
       now,
   };
+
+  createFinancialTransaction({
+    accountId:
+      account.id,
+
+    type:
+      "REVERSAL",
+
+    amount:
+      reversedAmount,
+
+    performedBy:
+      reversedBy.trim(),
+
+    performedAt:
+      effectiveReversalDate,
+
+    notes:
+      amount === undefined
+        ? "Estorno integral da baixa financeira."
+        : "Estorno parcial da baixa financeira.",
+  });
 
   return {
     account:

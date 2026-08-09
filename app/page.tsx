@@ -9,6 +9,21 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { obligations as mockObligations } from "@/modules/obligations/mocks/obligations";
 
 import {
+  getStoredFinancialAccounts,
+  type StoredFinancialAccount,
+} from "@/modules/financial/storage/financialStorage";
+
+import {
+  getFinancialTransactions,
+} from "@/modules/financial/storage/financialTransactionStorage";
+
+import type {
+  FinancialTransaction,
+} from "@/modules/financial/types/FinancialTransaction";
+
+import { formatCurrency } from "@/modules/financial/utils/currency";
+
+import {
   getStoredObligations,
   type StoredObligation,
 } from "@/modules/obligations/storage/obligationStorage";
@@ -250,6 +265,20 @@ export default function Home() {
     DashboardObligation[]
   >([]);
 
+  const [
+    storedFinancialAccounts,
+    setStoredFinancialAccounts,
+  ] = useState<
+    StoredFinancialAccount[]
+  >([]);
+
+  const [
+    financialTransactions,
+    setFinancialTransactions,
+  ] = useState<
+    FinancialTransaction[]
+  >([]);
+
   useEffect(() => {
     const stored =
       getStoredObligations().map(
@@ -258,6 +287,14 @@ export default function Home() {
 
     setStoredObligations(
       stored,
+    );
+
+    setStoredFinancialAccounts(
+      getStoredFinancialAccounts(),
+    );
+
+    setFinancialTransactions(
+      getFinancialTransactions(),
     );
   }, []);
 
@@ -272,6 +309,78 @@ export default function Home() {
 
   const referenceDate =
     new Date();
+
+  function getFinancialRemaining(
+    account: StoredFinancialAccount,
+  ): number {
+    const total =
+      account.amount -
+      account.discount +
+      account.interest +
+      account.fine;
+
+    return Math.max(
+      0,
+      total - account.paidAmount,
+    );
+  }
+
+  const activeFinancialAccounts =
+    storedFinancialAccounts.filter(
+      (item) =>
+        item.status !== "PAID" &&
+        item.status !== "CANCELED",
+    );
+
+  const payableAccounts =
+    activeFinancialAccounts.filter(
+      (item) =>
+        item.type === "PAYABLE",
+    );
+
+  const receivableAccounts =
+    activeFinancialAccounts.filter(
+      (item) =>
+        item.type === "RECEIVABLE",
+    );
+
+  const totalPayable =
+    payableAccounts.reduce(
+      (total, item) =>
+        total +
+        getFinancialRemaining(item),
+      0,
+    );
+
+  const totalReceivable =
+    receivableAccounts.reduce(
+      (total, item) =>
+        total +
+        getFinancialRemaining(item),
+      0,
+    );
+
+  const overdueFinancialAccounts =
+    activeFinancialAccounts.filter(
+      (item) =>
+        new Date(
+          item.dueDate,
+        ).getTime() <
+        referenceDate.getTime(),
+    );
+
+  const latestFinancialTransactions =
+    [...financialTransactions]
+      .sort(
+        (a, b) =>
+          new Date(
+            b.performedAt,
+          ).getTime() -
+          new Date(
+            a.performedAt,
+          ).getTime(),
+      )
+      .slice(0, 3);
 
   const activeObligations =
     allObligations.filter(
@@ -303,6 +412,10 @@ export default function Home() {
         item.priority ===
         "CRITICAL",
     );
+
+  const totalAttentionItems =
+    attentionItems.length +
+    overdueFinancialAccounts.length;
 
   const nextSevenDays =
     activeObligations.filter(
@@ -338,7 +451,9 @@ export default function Home() {
           overdueItems.length *
             12 -
           criticalItems.length *
-            5,
+            5 -
+          overdueFinancialAccounts.length *
+            8,
       ),
     );
 
@@ -412,7 +527,7 @@ export default function Home() {
               Existem{" "}
               <span className="font-semibold text-[#DC2626]">
                 {
-                  attentionItems.length
+                  totalAttentionItems
                 }{" "}
                 situações
               </span>{" "}
@@ -456,12 +571,12 @@ export default function Home() {
             <div className="mt-2 flex items-end justify-between">
               <span className="text-2xl font-bold text-[#DC2626]">
                 {
-                  attentionItems.length
+                  totalAttentionItems
                 }
               </span>
 
               <span className="text-[11px] font-semibold text-[#DC2626]">
-                Prioridade
+                Obrigações + financeiro
               </span>
             </div>
           </div>
@@ -662,7 +777,7 @@ export default function Home() {
           </div>
 
           {/* DIREITA */}
-          <div className="grid min-h-0 grid-rows-[auto_1fr] gap-4">
+          <div className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-4">
             {/* HARPIA */}
             <div className="rounded-2xl bg-[#0B2947] p-5 text-white shadow-sm">
               <div className="flex items-center justify-between">
@@ -681,14 +796,34 @@ export default function Home() {
                 </div>
               </div>
 
-              {firstPriority ? (
+              {overdueFinancialAccounts.length > 0 ? (
+                <>
+                  <p className="mt-4 text-sm leading-6 text-white/75">
+                    Existem{" "}
+                    <span className="font-semibold text-white">
+                      {overdueFinancialAccounts.length}{" "}
+                      {overdueFinancialAccounts.length === 1
+                        ? "conta financeira vencida"
+                        : "contas financeiras vencidas"}
+                    </span>
+                    . Sugiro revisar esses vencimentos antes das demais rotinas administrativas.
+                  </p>
+
+                  <div className="mt-4 flex items-center gap-2 text-[11px] text-white/45">
+                    <span className="h-2 w-2 rounded-full bg-[#DC2626]" />
+
+                    {totalAttentionItems}{" "}
+                    {totalAttentionItems === 1
+                      ? "situação exige atenção"
+                      : "situações exigem atenção"}
+                  </div>
+                </>
+              ) : firstPriority ? (
                 <>
                   <p className="mt-4 text-sm leading-6 text-white/75">
                     Sugiro começar por{" "}
                     <span className="font-semibold text-white">
-                      {
-                        firstPriority.title
-                      }
+                      {firstPriority.title}
                     </span>
                     {secondPriority
                       ? ` e depois acompanhar ${secondPriority.title.toLowerCase()}.`
@@ -698,11 +833,8 @@ export default function Home() {
                   <div className="mt-4 flex items-center gap-2 text-[11px] text-white/45">
                     <span className="h-2 w-2 rounded-full bg-[#8CC4EA]" />
 
-                    {
-                      attentionItems.length
-                    }{" "}
-                    {attentionItems.length ===
-                    1
+                    {totalAttentionItems}{" "}
+                    {totalAttentionItems === 1
                       ? "prioridade identificada"
                       : "prioridades identificadas"}
                   </div>
@@ -710,9 +842,7 @@ export default function Home() {
               ) : (
                 <>
                   <p className="mt-4 text-sm leading-6 text-white/75">
-                    Não existem
-                    prioridades críticas ou
-                    altas neste momento.
+                    Não existem prioridades críticas, altas ou contas financeiras vencidas neste momento.
                   </p>
 
                   <div className="mt-4 flex items-center gap-2 text-[11px] text-white/45">
@@ -723,6 +853,76 @@ export default function Home() {
                 </>
               )}
             </div>
+
+            {/* FINANCEIRO */}
+            <a
+              href="/financeiro"
+              className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition hover:border-[#154B7A]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94A3B8]">
+                    Posição Financeira
+                  </p>
+
+                  <h3 className="mt-1 text-sm font-bold text-[#0B2947]">
+                    Resumo do caixa
+                  </h3>
+                </div>
+
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                    overdueFinancialAccounts.length > 0
+                      ? "bg-red-50 text-[#DC2626]"
+                      : "bg-green-50 text-[#16A34A]"
+                  }`}
+                >
+                  {overdueFinancialAccounts.length > 0
+                    ? `${overdueFinancialAccounts.length} vencida${
+                        overdueFinancialAccounts.length === 1 ? "" : "s"
+                      }`
+                    : "Em dia"}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-red-50 p-3">
+                  <p className="text-[10px] font-medium text-red-700/70">
+                    A pagar
+                  </p>
+
+                  <p className="mt-1 text-base font-bold text-[#DC2626]">
+                    {formatCurrency(totalPayable)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-green-50 p-3">
+                  <p className="text-[10px] font-medium text-green-700/70">
+                    A receber
+                  </p>
+
+                  <p className="mt-1 text-base font-bold text-[#16A34A]">
+                    {formatCurrency(totalReceivable)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-[11px] text-[#64748B]">
+                <span>
+                  {activeFinancialAccounts.length}{" "}
+                  {activeFinancialAccounts.length === 1
+                    ? "conta ativa"
+                    : "contas ativas"}
+                </span>
+
+                <span>
+                  {latestFinancialTransactions.length}{" "}
+                  {latestFinancialTransactions.length === 1
+                    ? "movimentação recente"
+                    : "movimentações recentes"}
+                </span>
+              </div>
+            </a>
 
             {/* AGENDA */}
             <div className="min-h-0 overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-sm">

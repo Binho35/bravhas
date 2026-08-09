@@ -1,5 +1,7 @@
 import type { StoredFinancialAccount } from "../storage/financialStorage";
 
+import { createFinancialTransaction } from "./createFinancialTransaction";
+
 export interface CancelFinancialAccountInput {
   account: StoredFinancialAccount;
 
@@ -29,9 +31,17 @@ export function cancelFinancialAccount({
     );
   }
 
+  if (!canceledBy.trim()) {
+    throw new Error(
+      "O responsável pelo cancelamento é obrigatório.",
+    );
+  }
+
   const now =
-    canceledAt ??
     new Date().toISOString();
+
+  const effectiveCancellationDate =
+    canceledAt ?? now;
 
   const updatedAccount: StoredFinancialAccount = {
     ...account,
@@ -39,11 +49,30 @@ export function cancelFinancialAccount({
     status: "CANCELED",
 
     updatedBy:
-      canceledBy,
+      canceledBy.trim(),
 
     updatedAt:
       now,
   };
+
+  createFinancialTransaction({
+    accountId:
+      account.id,
+
+    type:
+      "CANCELLATION",
+
+    amount: 0,
+
+    performedBy:
+      canceledBy.trim(),
+
+    performedAt:
+      effectiveCancellationDate,
+
+    notes:
+      "Conta cancelada.",
+  });
 
   return {
     account:

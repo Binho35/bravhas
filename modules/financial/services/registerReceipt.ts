@@ -1,4 +1,7 @@
 import type { StoredFinancialAccount } from "../storage/financialStorage";
+
+import { createFinancialTransaction } from "./createFinancialTransaction";
+
 import { roundCurrency } from "../utils/currency";
 
 export interface RegisterReceiptInput {
@@ -49,6 +52,12 @@ export function registerReceipt({
     );
   }
 
+  if (!receivedBy.trim()) {
+    throw new Error(
+      "O responsável pelo recebimento é obrigatório.",
+    );
+  }
+
   const total =
     roundCurrency(
       account.amount -
@@ -64,7 +73,8 @@ export function registerReceipt({
 
   const remainingBeforeReceipt =
     roundCurrency(
-      total - currentReceived,
+      total -
+        currentReceived,
     );
 
   if (remainingBeforeReceipt <= 0) {
@@ -82,9 +92,13 @@ export function registerReceipt({
     );
   }
 
+  const normalizedAmount =
+    roundCurrency(amount);
+
   const nextReceivedAmount =
     roundCurrency(
-      currentReceived + amount,
+      currentReceived +
+        normalizedAmount,
     );
 
   const fullyReceived =
@@ -102,28 +116,54 @@ export function registerReceipt({
   const now =
     new Date().toISOString();
 
-  const updatedAccount: StoredFinancialAccount = {
-    ...account,
+  const effectiveReceiptDate =
+    receiptDate ?? now;
 
-    paidAmount:
+  const updatedAccount: StoredFinancialAccount =
+    {
+      ...account,
+
+      paidAmount:
+        fullyReceived
+          ? total
+          : nextReceivedAmount,
+
+      status:
+        fullyReceived
+          ? "PAID"
+          : "PARTIALLY_PAID",
+
+      paymentDate:
+        effectiveReceiptDate,
+
+      updatedBy:
+        receivedBy.trim(),
+
+      updatedAt:
+        now,
+    };
+
+  createFinancialTransaction({
+    accountId:
+      account.id,
+
+    type:
+      "RECEIPT",
+
+    amount:
+      normalizedAmount,
+
+    performedBy:
+      receivedBy.trim(),
+
+    performedAt:
+      effectiveReceiptDate,
+
+    notes:
       fullyReceived
-        ? total
-        : nextReceivedAmount,
-
-    status:
-      fullyReceived
-        ? "PAID"
-        : "PARTIALLY_PAID",
-
-    paymentDate:
-      receiptDate ?? now,
-
-    updatedBy:
-      receivedBy,
-
-    updatedAt:
-      now,
-  };
+        ? "Recebimento integral registrado."
+        : "Recebimento parcial registrado.",
+  });
 
   return {
     account:
