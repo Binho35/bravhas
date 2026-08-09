@@ -3,6 +3,7 @@
 import {
   type ReactNode,
   useEffect,
+  useState,
 } from "react";
 
 import {
@@ -11,8 +12,8 @@ import {
 } from "next/navigation";
 
 import {
-  useAuth,
-} from "../hooks/useAuth";
+  getCurrentSession,
+} from "../services/getCurrentSession";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -27,38 +28,49 @@ export function AuthGuard({
   const pathname =
     usePathname();
 
-  const {
-    authenticated,
-    loading,
-  } = useAuth();
+  const [
+    checking,
+    setChecking,
+  ] = useState(true);
+
+  const [
+    allowed,
+    setAllowed,
+  ] = useState(false);
 
   useEffect(() => {
-    if (
-      loading ||
-      authenticated ||
-      pathname === "/login"
-    ) {
+    if (pathname === "/login") {
+      setAllowed(true);
+      setChecking(false);
+
       return;
     }
 
-    router.replace("/login");
+    const {
+      authenticated,
+    } = getCurrentSession();
+
+    if (!authenticated) {
+      setAllowed(false);
+      setChecking(false);
+
+      router.replace("/login");
+
+      return;
+    }
+
+    setAllowed(true);
+    setChecking(false);
   }, [
-    authenticated,
-    loading,
     pathname,
     router,
   ]);
 
-  if (
-    pathname === "/login"
-  ) {
+  if (pathname === "/login") {
     return children;
   }
 
-  if (
-    loading ||
-    !authenticated
-  ) {
+  if (checking) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F9FC]">
         <div className="rounded-2xl border border-[#E2E8F0] bg-white px-8 py-7 text-center shadow-sm">
@@ -76,6 +88,10 @@ export function AuthGuard({
         </div>
       </main>
     );
+  }
+
+  if (!allowed) {
+    return null;
   }
 
   return children;
