@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
+
+import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
 import {
   addStoredObligation,
   type StoredObligation,
@@ -136,7 +138,11 @@ export default function NewObligationPage() {
   }
 
   return (
-    <AppShell
+    <PermissionGuard
+      resource="OBLIGATIONS"
+      action="VIEW"
+    >
+      <AppShell
       sidebar={<Sidebar />}
       header={<Header />}
     >
@@ -540,6 +546,7 @@ export default function NewObligationPage() {
           </div>
         </section>
       </form>
-    </AppShell>
+      </AppShell>
+    </PermissionGuard>
   );
 }

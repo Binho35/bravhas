@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
+
+import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
 import { obligations as mockObligations } from "@/modules/obligations/mocks/obligations";
 import {
   getStoredObligations,
@@ -411,7 +413,11 @@ export default function ObligationDetailsPage() {
 
   if (!obligation) {
     return (
-      <AppShell
+      <PermissionGuard
+        resource="OBLIGATIONS"
+        action="VIEW"
+      >
+        <AppShell
         sidebar={<Sidebar />}
         header={<Header />}
       >
@@ -435,7 +441,8 @@ export default function ObligationDetailsPage() {
             </button>
           </div>
         </div>
-      </AppShell>
+        </AppShell>
+      </PermissionGuard>
     );
   }
 
@@ -443,7 +450,11 @@ export default function ObligationDetailsPage() {
     obligation.source === "mock";
 
   return (
-    <AppShell
+    <PermissionGuard
+      resource="OBLIGATIONS"
+      action="VIEW"
+    >
+      <AppShell
       sidebar={<Sidebar />}
       header={<Header />}
     >
@@ -884,6 +895,7 @@ export default function ObligationDetailsPage() {
           </div>
         </section>
       </div>
-    </AppShell>
+      </AppShell>
+    </PermissionGuard>
   );
 }
