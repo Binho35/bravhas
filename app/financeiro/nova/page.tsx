@@ -7,6 +7,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 
+import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
+
 import {
   addStoredFinancialAccount,
   type StoredFinancialAccount,
@@ -171,7 +173,11 @@ export default function NovaContaFinanceiraPage() {
   }
 
   return (
-    <AppShell
+    <PermissionGuard
+      resource="FINANCIAL"
+      action="VIEW"
+    >
+      <AppShell
       sidebar={<Sidebar />}
       header={<Header />}
     >
@@ -451,6 +457,7 @@ export default function NovaContaFinanceiraPage() {
           </div>
         </section>
       </div>
-    </AppShell>
+      </AppShell>
+    </PermissionGuard>
   );
 }
