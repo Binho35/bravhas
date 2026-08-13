@@ -1,0 +1,353 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  FINANCIAL
+  HR
+  PAYROLL
+  OPERATIONAL
+}
+
+enum FinancialAccountType {
+  PAYABLE
+  RECEIVABLE
+}
+
+enum FinancialAccountStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum FinancialTransactionType {
+  PAYMENT
+  RECEIPT
+  REVERSAL
+  CANCELLATION
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  prefix    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+
+  suppliers    Supplier[]
+  customers    Customer[]
+  categories   FinancialCategory[]
+  costCenters  CostCenter[]
+  bankAccounts BankAccount[]
+
+  financialAccounts FinancialAccount[]
+
+  @@unique([prefix])
+  @@index([active])
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  users User[]
+
+  suppliers    Supplier[]
+  customers    Customer[]
+  categories   FinancialCategory[]
+  costCenters  CostCenter[]
+  bankAccounts BankAccount[]
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([active])
+}
+
+model User {
+  id            String   @id @default(uuid())
+  companyId     String
+  branchId      String?
+  companyPrefix String
+  username      String
+  loginId       String   @unique
+  name          String
+  email         String
+  role          UserRole
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  sessions UserSession[]
+
+  createdFinancialAccounts FinancialAccount[] @relation("FinancialAccountCreatedBy")
+  updatedFinancialAccounts FinancialAccount[] @relation("FinancialAccountUpdatedBy")
+
+  financialTransactions FinancialTransaction[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([email])
+  @@index([role])
+  @@index([active])
+}
+
+model UserSession {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  companyId String
+  branchId  String?
+
+  name      String
+  document  String?
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([document])
+  @@index([active])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  companyId String
+  branchId  String?
+
+  name      String
+  document  String?
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([document])
+  @@index([active])
+}
+
+model FinancialCategory {
+  id        String   @id @default(uuid())
+  companyId String
+  branchId  String?
+
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([active])
+}
+
+model CostCenter {
+  id        String   @id @default(uuid())
+  companyId String
+  branchId  String?
+
+  name        String
+  code        String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([active])
+}
+
+model BankAccount {
+  id        String   @id @default(uuid())
+  companyId String
+  branchId  String?
+
+  name          String
+  bankCode      String?
+  bankName      String?
+  agency        String?
+  accountNumber String?
+  accountType   String?
+  pixKey        String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  financialAccounts FinancialAccount[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([active])
+}
+
+model FinancialAccount {
+  id        String @id @default(uuid())
+  companyId String
+  branchId  String
+
+  costCenterId  String?
+  categoryId    String?
+  supplierId    String?
+  customerId    String?
+  bankAccountId String?
+
+  type   FinancialAccountType
+  status FinancialAccountStatus
+
+  description    String
+  documentNumber String?
+
+  issueDate   DateTime
+  dueDate     DateTime
+  paymentDate DateTime?
+
+  amount     Decimal @db.Decimal(15, 2)
+  paidAmount Decimal @db.Decimal(15, 2)
+
+  discount Decimal @db.Decimal(15, 2)
+  interest Decimal @db.Decimal(15, 2)
+  fine     Decimal @db.Decimal(15, 2)
+
+  notes String?
+
+  createdBy String
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  costCenter CostCenter? @relation(fields: [costCenterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  category FinancialCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdByUser User @relation("FinancialAccountCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  updatedByUser User? @relation("FinancialAccountUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  transactions FinancialTransaction[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([costCenterId])
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([customerId])
+  @@index([bankAccountId])
+  @@index([type])
+  @@index([status])
+  @@index([dueDate])
+  @@index([paymentDate])
+  @@index([createdBy])
+  @@index([updatedBy])
+}
+
+model FinancialTransaction {
+  id String @id @default(uuid())
+
+  accountId   String
+  performedBy String
+
+  type FinancialTransactionType
+
+  amount Decimal @db.Decimal(15, 2)
+
+  performedAt DateTime
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  user User @relation(fields: [performedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([accountId])
+  @@index([performedBy])
+  @@index([type])
+  @@index([performedAt])
+}

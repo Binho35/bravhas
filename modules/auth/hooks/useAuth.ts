@@ -27,24 +27,21 @@ export function useAuth() {
   const [
     session,
     setSession,
-  ] =
-    useState<AuthSession | null>(
-      null,
-    );
+  ] = useState<AuthSession | null>(
+    null,
+  );
 
   const [
     loading,
     setLoading,
-  ] =
-    useState(true);
+  ] = useState(true);
 
   const [
     error,
     setError,
-  ] =
-    useState<string | null>(
-      null,
-    );
+  ] = useState<string | null>(
+    null,
+  );
 
   const refreshSession =
     useCallback(() => {
@@ -62,16 +59,18 @@ export function useAuth() {
 
   useEffect(() => {
     refreshSession();
-  }, [refreshSession]);
+  }, [
+    refreshSession,
+  ]);
 
-  function signIn(
+  async function signIn(
     input: LoginInput,
-  ): boolean {
+  ): Promise<boolean> {
     setError(null);
 
     try {
       const result =
-        login(input);
+        await login(input);
 
       setSession(
         result.session,

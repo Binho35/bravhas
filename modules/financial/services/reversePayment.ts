@@ -87,9 +87,20 @@ export function reversePayment({
         reversedAmount,
     );
 
+  const dueDate =
+    new Date(
+      account.dueDate,
+    );
+
+  const isOverdue =
+    dueDate.getTime() <
+      Date.now();
+
   const nextStatus =
     remainingPaidAmount <= 0
-      ? "OPEN"
+      ? isOverdue
+        ? "OVERDUE"
+        : "OPEN"
       : "PARTIALLY_PAID";
 
   const now =
@@ -98,26 +109,27 @@ export function reversePayment({
   const effectiveReversalDate =
     reversedAt ?? now;
 
-  const updatedAccount: StoredFinancialAccount = {
-    ...account,
+  const updatedAccount: StoredFinancialAccount =
+    {
+      ...account,
 
-    paidAmount:
-      remainingPaidAmount,
+      paidAmount:
+        remainingPaidAmount,
 
-    status:
-      nextStatus,
+      status:
+        nextStatus,
 
-    paymentDate:
-      remainingPaidAmount <= 0
-        ? null
-        : account.paymentDate,
+      paymentDate:
+        remainingPaidAmount <= 0
+          ? null
+          : account.paymentDate,
 
-    updatedBy:
-      reversedBy.trim(),
+      updatedBy:
+        reversedBy.trim(),
 
-    updatedAt:
-      now,
-  };
+      updatedAt:
+        now,
+    };
 
   createFinancialTransaction({
     accountId:

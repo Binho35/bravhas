@@ -7,100 +7,16 @@ import {
   useState,
 } from "react";
 
-import { financialAccounts as mockFinancialAccounts } from "../mocks/financialAccounts";
+import type {
+  FinancialAccountView,
+} from "../types/FinancialAccountView";
 
-import {
-  getStoredFinancialAccounts,
-  type StoredFinancialAccount,
-} from "../storage/financialStorage";
+interface FinancialAccountApiResponse {
+  success: boolean;
 
-import type { FinancialAccountView } from "../types/FinancialAccountView";
+  account?: FinancialAccountView;
 
-function convertStoredAccount(
-  account: StoredFinancialAccount,
-): FinancialAccountView {
-  return {
-    ...account,
-    source: "stored",
-  };
-}
-
-function convertMockAccount(
-  account: (typeof mockFinancialAccounts)[number],
-): FinancialAccountView {
-  return {
-    id: account.id,
-
-    companyId: account.companyId,
-
-    branchId: account.branchId,
-
-    costCenterId:
-      account.costCenterId ?? null,
-
-    categoryId:
-      account.categoryId ?? null,
-
-    supplierId:
-      account.supplierId ?? null,
-
-    customerId:
-      account.customerId ?? null,
-
-    bankAccountId:
-      account.bankAccountId ?? null,
-
-    type: account.type,
-
-    status: account.status,
-
-    description:
-      account.description,
-
-    documentNumber:
-      account.documentNumber ?? null,
-
-    issueDate:
-      account.issueDate.toISOString(),
-
-    dueDate:
-      account.dueDate.toISOString(),
-
-    paymentDate:
-      account.paymentDate
-        ? account.paymentDate.toISOString()
-        : null,
-
-    amount: account.amount,
-
-    paidAmount:
-      account.paidAmount,
-
-    discount:
-      account.discount,
-
-    interest:
-      account.interest,
-
-    fine: account.fine,
-
-    notes:
-      account.notes ?? null,
-
-    createdBy:
-      account.createdBy,
-
-    updatedBy:
-      account.updatedBy ?? null,
-
-    createdAt:
-      account.createdAt.toISOString(),
-
-    updatedAt:
-      account.updatedAt.toISOString(),
-
-    source: "mock",
-  };
+  message?: string;
 }
 
 export function useFinancialAccount(
@@ -110,70 +26,94 @@ export function useFinancialAccount(
     account,
     setAccount,
   ] =
-    useState<FinancialAccountView | null>(
-      null,
-    );
+    useState<
+      FinancialAccountView | null
+    >(null);
 
-  const [loading, setLoading] =
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true);
 
-  const [notFound, setNotFound] =
+  const [
+    notFound,
+    setNotFound,
+  ] =
     useState(false);
 
   const loadAccount =
-    useCallback(() => {
-      setLoading(true);
+    useCallback(
+      async () => {
+        if (!accountId) {
+          setAccount(null);
+          setNotFound(true);
+          setLoading(false);
 
-      setNotFound(false);
+          return;
+        }
 
-      const stored =
-        getStoredFinancialAccounts();
+        setLoading(true);
+        setNotFound(false);
 
-      const storedMatch =
-        stored.find(
-          (item) =>
-            item.id === accountId,
-        );
+        try {
+          const response =
+            await fetch(
+              `/api/financeiro/contas/${accountId}`,
+            );
 
-      if (storedMatch) {
-        setAccount(
-          convertStoredAccount(
-            storedMatch,
-          ),
-        );
+          if (
+            response.status ===
+            404
+          ) {
+            setAccount(null);
+            setNotFound(true);
 
-        setLoading(false);
+            return;
+          }
 
-        return;
-      }
+          if (!response.ok) {
+            throw new Error(
+              "Não foi possível carregar a conta financeira.",
+            );
+          }
 
-      const mockMatch =
-        mockFinancialAccounts.find(
-          (item) =>
-            item.id === accountId,
-        );
+          const data =
+            (await response.json()) as FinancialAccountApiResponse;
 
-      if (mockMatch) {
-        setAccount(
-          convertMockAccount(
-            mockMatch,
-          ),
-        );
+          if (
+            !data.success ||
+            !data.account
+          ) {
+            throw new Error(
+              data.message ??
+                "Resposta inválida ao carregar a conta financeira.",
+            );
+          }
 
-        setLoading(false);
+          setAccount({
+            ...data.account,
 
-        return;
-      }
+            source:
+              "stored",
+          });
+        } catch (error) {
+          console.error(
+            "Erro ao carregar conta financeira:",
+            error,
+          );
 
-      setAccount(null);
-
-      setNotFound(true);
-
-      setLoading(false);
-    }, [accountId]);
+          setAccount(null);
+          setNotFound(true);
+        } finally {
+          setLoading(false);
+        }
+      },
+      [accountId],
+    );
 
   useEffect(() => {
-    loadAccount();
+    void loadAccount();
   }, [loadAccount]);
 
   const total =
@@ -207,8 +147,7 @@ export function useFinancialAccount(
     ]);
 
   const isReadOnly =
-    account?.source ===
-      "mock";
+    false;
 
   const isClosed =
     account?.status ===

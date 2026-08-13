@@ -4,18 +4,7 @@ import { useState } from "react";
 
 import type { FinancialAccountView } from "../types/FinancialAccountView";
 
-import {
-  getStoredFinancialAccounts,
-  updateStoredFinancialAccount,
-  type StoredFinancialAccount,
-} from "../storage/financialStorage";
-
 import { parseCurrencyInput } from "../utils/currency";
-
-import { registerPayment } from "../services/registerPayment";
-import { registerReceipt } from "../services/registerReceipt";
-import { cancelFinancialAccount } from "../services/cancelFinancialAccount";
-import { reversePayment } from "../services/reversePayment";
 
 interface FinancialActionsProps {
   account: FinancialAccountView;
@@ -29,23 +18,89 @@ interface FinancialActionsProps {
   ) => void;
 }
 
+interface FinancialApiResponse {
+  success: boolean;
+
+  account?: Omit<
+    FinancialAccountView,
+    "source"
+  >;
+
+  transactionId?: string;
+
+  fullyPaid?: boolean;
+
+  fullyReceived?: boolean;
+
+  remaining?: number;
+
+  reversedAmount?: number;
+
+  remainingPaidAmount?: number;
+
+  canceledAt?: string;
+
+  message?: string;
+}
+
+async function callFinancialApi(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<FinancialApiResponse> {
+  const response =
+    await fetch(endpoint, {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify(body),
+    });
+
+  const data =
+    (await response.json()) as FinancialApiResponse;
+
+  if (
+    !response.ok ||
+    !data.success
+  ) {
+    throw new Error(
+      data.message ??
+        "Não foi possível concluir a operação financeira.",
+    );
+  }
+
+  return data;
+}
+
 export function FinancialActions({
   account,
   total,
   remaining,
   onAccountUpdated,
 }: FinancialActionsProps) {
-  const [settlementValue, setSettlementValue] =
-    useState("");
+  const [
+    settlementValue,
+    setSettlementValue,
+  ] = useState("");
 
-  const [reverseValue, setReverseValue] =
-    useState("");
+  const [
+    reverseValue,
+    setReverseValue,
+  ] = useState("");
 
   const [message, setMessage] =
     useState<string | null>(null);
 
   const [error, setError] =
     useState<string | null>(null);
+
+  const [
+    processing,
+    setProcessing,
+  ] = useState(false);
 
   const isReadOnly =
     account.source === "mock";
@@ -62,25 +117,14 @@ export function FinancialActions({
     setError(null);
   }
 
-  function getStoredAccount():
-    | StoredFinancialAccount
-    | null {
-    return (
-      getStoredFinancialAccounts().find(
-        (item) =>
-          item.id === account.id,
-      ) ?? null
-    );
-  }
-
-  function persist(
-    updated: StoredFinancialAccount,
+  function applyUpdatedAccount(
+    updated:
+      Omit<
+        FinancialAccountView,
+        "source"
+      >,
     successMessage: string,
   ) {
-    updateStoredFinancialAccount(
-      updated,
-    );
-
     onAccountUpdated({
       ...updated,
       source: "stored",
@@ -93,7 +137,7 @@ export function FinancialActions({
     setError(null);
   }
 
-  function handlePartialSettlement() {
+  async function handlePartialSettlement() {
     clearFeedback();
 
     if (isReadOnly) {
@@ -106,16 +150,6 @@ export function FinancialActions({
     if (isClosed) {
       setError(
         "Esta conta não permite uma nova baixa.",
-      );
-      return;
-    }
-
-    const current =
-      getStoredAccount();
-
-    if (!current) {
-      setError(
-        "Conta não encontrada no armazenamento.",
       );
       return;
     }
@@ -135,15 +169,34 @@ export function FinancialActions({
     }
 
     try {
-      if (account.type === "PAYABLE") {
-        const result =
-          registerPayment({
-            account: current,
-            amount: value,
-            paidBy: "Robson",
-          });
+      setProcessing(true);
 
-        persist(
+      if (
+        account.type ===
+        "PAYABLE"
+      ) {
+        const result =
+          await callFinancialApi(
+            "/api/financeiro/pagamento",
+            {
+              accountId:
+                account.id,
+
+              amount:
+                value,
+
+              paidBy:
+                "Robson",
+            },
+          );
+
+        if (!result.account) {
+          throw new Error(
+            "A API não retornou a conta atualizada.",
+          );
+        }
+
+        applyUpdatedAccount(
           result.account,
           result.fullyPaid
             ? "Pagamento registrado. Conta quitada."
@@ -151,13 +204,27 @@ export function FinancialActions({
         );
       } else {
         const result =
-          registerReceipt({
-            account: current,
-            amount: value,
-            receivedBy: "Robson",
-          });
+          await callFinancialApi(
+            "/api/financeiro/recebimento",
+            {
+              accountId:
+                account.id,
 
-        persist(
+              amount:
+                value,
+
+              receivedBy:
+                "Robson",
+            },
+          );
+
+        if (!result.account) {
+          throw new Error(
+            "A API não retornou a conta atualizada.",
+          );
+        }
+
+        applyUpdatedAccount(
           result.account,
           result.fullyReceived
             ? "Recebimento registrado. Conta liquidada."
@@ -172,10 +239,12 @@ export function FinancialActions({
           ? caughtError.message
           : "Não foi possível registrar a baixa.",
       );
+    } finally {
+      setProcessing(false);
     }
   }
 
-  function handleFullSettlement() {
+  async function handleFullSettlement() {
     clearFeedback();
 
     if (isReadOnly) {
@@ -192,16 +261,6 @@ export function FinancialActions({
       return;
     }
 
-    const current =
-      getStoredAccount();
-
-    if (!current) {
-      setError(
-        "Conta não encontrada no armazenamento.",
-      );
-      return;
-    }
-
     if (remaining <= 0) {
       setError(
         "Esta conta não possui saldo pendente.",
@@ -210,27 +269,60 @@ export function FinancialActions({
     }
 
     try {
-      if (account.type === "PAYABLE") {
-        const result =
-          registerPayment({
-            account: current,
-            amount: remaining,
-            paidBy: "Robson",
-          });
+      setProcessing(true);
 
-        persist(
+      if (
+        account.type ===
+        "PAYABLE"
+      ) {
+        const result =
+          await callFinancialApi(
+            "/api/financeiro/pagamento",
+            {
+              accountId:
+                account.id,
+
+              amount:
+                remaining,
+
+              paidBy:
+                "Robson",
+            },
+          );
+
+        if (!result.account) {
+          throw new Error(
+            "A API não retornou a conta atualizada.",
+          );
+        }
+
+        applyUpdatedAccount(
           result.account,
           "Conta paga integralmente.",
         );
       } else {
         const result =
-          registerReceipt({
-            account: current,
-            amount: remaining,
-            receivedBy: "Robson",
-          });
+          await callFinancialApi(
+            "/api/financeiro/recebimento",
+            {
+              accountId:
+                account.id,
 
-        persist(
+              amount:
+                remaining,
+
+              receivedBy:
+                "Robson",
+            },
+          );
+
+        if (!result.account) {
+          throw new Error(
+            "A API não retornou a conta atualizada.",
+          );
+        }
+
+        applyUpdatedAccount(
           result.account,
           "Conta recebida integralmente.",
         );
@@ -243,10 +335,12 @@ export function FinancialActions({
           ? caughtError.message
           : "Não foi possível quitar o saldo.",
       );
+    } finally {
+      setProcessing(false);
     }
   }
 
-  function handleCancel() {
+  async function handleCancel() {
     clearFeedback();
 
     if (isReadOnly) {
@@ -265,24 +359,28 @@ export function FinancialActions({
       return;
     }
 
-    const current =
-      getStoredAccount();
-
-    if (!current) {
-      setError(
-        "Conta não encontrada no armazenamento.",
-      );
-      return;
-    }
-
     try {
-      const result =
-        cancelFinancialAccount({
-          account: current,
-          canceledBy: "Robson",
-        });
+      setProcessing(true);
 
-      persist(
+      const result =
+        await callFinancialApi(
+          "/api/financeiro/cancelamento",
+          {
+            accountId:
+              account.id,
+
+            canceledBy:
+              "Robson",
+          },
+        );
+
+      if (!result.account) {
+        throw new Error(
+          "A API não retornou a conta atualizada.",
+        );
+      }
+
+      applyUpdatedAccount(
         result.account,
         "Conta cancelada com sucesso.",
       );
@@ -295,25 +393,17 @@ export function FinancialActions({
           ? caughtError.message
           : "Não foi possível cancelar a conta.",
       );
+    } finally {
+      setProcessing(false);
     }
   }
 
-  function handleReverse() {
+  async function handleReverse() {
     clearFeedback();
 
     if (isReadOnly) {
       setError(
         "Lançamentos demonstrativos são somente leitura.",
-      );
-      return;
-    }
-
-    const current =
-      getStoredAccount();
-
-    if (!current) {
-      setError(
-        "Conta não encontrada no armazenamento.",
       );
       return;
     }
@@ -333,14 +423,30 @@ export function FinancialActions({
         : undefined;
 
     try {
-      const result =
-        reversePayment({
-          account: current,
-          amount: parsedValue,
-          reversedBy: "Robson",
-        });
+      setProcessing(true);
 
-      persist(
+      const result =
+        await callFinancialApi(
+          "/api/financeiro/estorno",
+          {
+            accountId:
+              account.id,
+
+            amount:
+              parsedValue,
+
+            reversedBy:
+              "Robson",
+          },
+        );
+
+      if (!result.account) {
+        throw new Error(
+          "A API não retornou a conta atualizada.",
+        );
+      }
+
+      applyUpdatedAccount(
         result.account,
         parsedValue === undefined
           ? "Baixa estornada integralmente."
@@ -355,6 +461,8 @@ export function FinancialActions({
           ? caughtError.message
           : "Não foi possível realizar o estorno.",
       );
+    } finally {
+      setProcessing(false);
     }
   }
 
@@ -366,7 +474,8 @@ export function FinancialActions({
         </p>
 
         <h3 className="mt-1 text-base font-bold text-[#0B2947]">
-          {account.type === "PAYABLE"
+          {account.type ===
+          "PAYABLE"
             ? "Pagamento"
             : "Recebimento"}
         </h3>
@@ -392,7 +501,8 @@ export function FinancialActions({
           }}
           disabled={
             isReadOnly ||
-            isClosed
+            isClosed ||
+            processing
           }
           placeholder="0,00"
           inputMode="decimal"
@@ -405,14 +515,17 @@ export function FinancialActions({
           type="button"
           disabled={
             isReadOnly ||
-            isClosed
+            isClosed ||
+            processing
           }
           onClick={
             handlePartialSettlement
           }
           className="h-10 rounded-xl border border-[#E2E8F0] bg-white text-xs font-semibold text-[#154B7A] transition hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:text-[#CBD5E1]"
         >
-          Baixa parcial
+          {processing
+            ? "Processando..."
+            : "Baixa parcial"}
         </button>
 
         <button
@@ -420,7 +533,8 @@ export function FinancialActions({
           disabled={
             isReadOnly ||
             isClosed ||
-            remaining <= 0
+            remaining <= 0 ||
+            processing
           }
           onClick={
             handleFullSettlement
@@ -452,7 +566,9 @@ export function FinancialActions({
           disabled={
             isReadOnly ||
             !hasSettlement ||
-            account.status === "CANCELED"
+            account.status ===
+              "CANCELED" ||
+            processing
           }
           placeholder="Valor do estorno (opcional)"
           inputMode="decimal"
@@ -464,9 +580,13 @@ export function FinancialActions({
           disabled={
             isReadOnly ||
             !hasSettlement ||
-            account.status === "CANCELED"
+            account.status ===
+              "CANCELED" ||
+            processing
           }
-          onClick={handleReverse}
+          onClick={
+            handleReverse
+          }
           className="mt-2 h-10 w-full rounded-xl border border-amber-200 bg-amber-50 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-[#E2E8F0] disabled:bg-[#F8FAFC] disabled:text-[#CBD5E1]"
         >
           Estornar baixa
@@ -477,8 +597,11 @@ export function FinancialActions({
         type="button"
         disabled={
           isReadOnly ||
-          account.status === "PAID" ||
-          account.status === "CANCELED"
+          account.status ===
+            "PAID" ||
+          account.status ===
+            "CANCELED" ||
+          processing
         }
         onClick={handleCancel}
         className="mt-3 h-10 w-full rounded-xl border border-red-200 bg-red-50 text-xs font-semibold text-[#DC2626] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:border-[#E2E8F0] disabled:bg-[#F8FAFC] disabled:text-[#CBD5E1]"

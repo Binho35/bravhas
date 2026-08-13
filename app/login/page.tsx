@@ -61,7 +61,7 @@ export default function LoginPage() {
     router,
   ]);
 
-  function handleSubmit(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
@@ -69,7 +69,7 @@ export default function LoginPage() {
     setSubmitting(true);
 
     const success =
-      signIn({
+      await signIn({
         loginId,
         password,
       });
@@ -85,21 +85,17 @@ export default function LoginPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F9FC]">
-        <div className="rounded-2xl border border-[#E2E8F0] bg-white px-8 py-7 shadow-sm">
-          <p className="text-sm font-semibold text-[#154B7A]">
-            Carregando BravHAS...
-          </p>
-        </div>
+        <p className="text-sm font-medium text-[#64748B]">
+          Carregando BravHAS...
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="grid min-h-screen grid-cols-[1.05fr_0.95fr] bg-[#F7F9FC]">
+    <main className="grid min-h-screen lg:grid-cols-2">
       {/* APRESENTAÇÃO */}
-      <section className="relative flex overflow-hidden bg-[#0B2947] px-14 py-12 text-white">
-        <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-[#154B7A]/40" />
-
+      <section className="relative hidden overflow-hidden bg-[#0B2947] px-12 py-10 text-white lg:flex">
         <div className="absolute -bottom-44 -right-28 h-[420px] w-[420px] rounded-full bg-[#8CC4EA]/10" />
 
         <div className="relative z-10 flex w-full flex-col justify-between">
@@ -175,7 +171,7 @@ export default function LoginPage() {
       </section>
 
       {/* LOGIN */}
-      <section className="flex items-center justify-center px-10">
+      <section className="flex items-center justify-center px-6 py-10 lg:px-10">
         <div className="w-full max-w-md">
           <div className="rounded-3xl border border-[#E2E8F0] bg-white p-8 shadow-sm">
             <div>

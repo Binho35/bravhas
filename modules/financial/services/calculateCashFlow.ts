@@ -128,6 +128,30 @@ export function calculateCashFlow({
       new Date(),
     );
 
+  const effectiveStart =
+    startDate
+      ? normalizeDate(startDate)
+      : today;
+
+  const effectiveEnd =
+    endDate
+      ? normalizeDate(endDate)
+      : new Date(
+          effectiveStart.getFullYear(),
+          effectiveStart.getMonth(),
+          effectiveStart.getDate() +
+            30,
+        );
+
+  if (
+    effectiveEnd.getTime() <
+    effectiveStart.getTime()
+  ) {
+    throw new Error(
+      "A data final do fluxo de caixa não pode ser anterior à data inicial.",
+    );
+  }
+
   const activeAccounts =
     accounts.filter(
       isActiveAccount,
@@ -136,13 +160,15 @@ export function calculateCashFlow({
   const payableAccounts =
     activeAccounts.filter(
       (account) =>
-        account.type === "PAYABLE",
+        account.type ===
+        "PAYABLE",
     );
 
   const receivableAccounts =
     activeAccounts.filter(
       (account) =>
-        account.type === "RECEIVABLE",
+        account.type ===
+        "RECEIVABLE",
     );
 
   const totalPayable =
@@ -248,25 +274,6 @@ export function calculateCashFlow({
         totalPayable,
     );
 
-  const effectiveStart =
-    startDate
-      ? normalizeDate(
-          startDate,
-        )
-      : today;
-
-  const effectiveEnd =
-    endDate
-      ? normalizeDate(
-          endDate,
-        )
-      : new Date(
-          effectiveStart.getFullYear(),
-          effectiveStart.getMonth(),
-          effectiveStart.getDate() +
-            30,
-        );
-
   const bucketMap =
     new Map<
       string,
@@ -280,7 +287,9 @@ export function calculateCashFlow({
     dateKey: string,
   ) {
     if (
-      !bucketMap.has(dateKey)
+      !bucketMap.has(
+        dateKey,
+      )
     ) {
       bucketMap.set(
         dateKey,
@@ -297,18 +306,26 @@ export function calculateCashFlow({
   }
 
   for (
-    const account
-    of activeAccounts
+    const account of activeAccounts
   ) {
     const dueDate =
       normalizeDate(
         account.dueDate,
       );
 
-    if (
+    const isPastDue =
       dueDate.getTime() <
+      effectiveStart.getTime();
+
+    const bucketDate =
+      isPastDue
+        ? effectiveStart
+        : dueDate;
+
+    if (
+      bucketDate.getTime() <
         effectiveStart.getTime() ||
-      dueDate.getTime() >
+      bucketDate.getTime() >
         effectiveEnd.getTime()
     ) {
       continue;
@@ -316,7 +333,7 @@ export function calculateCashFlow({
 
     const dateKey =
       toDateKey(
-        dueDate,
+        bucketDate,
       );
 
     const bucket =
@@ -347,8 +364,8 @@ export function calculateCashFlow({
     }
   }
 
-  const buckets: CashFlowBucket[] =
-    [];
+  const buckets:
+    CashFlowBucket[] = [];
 
   let runningBalance =
     roundCurrency(

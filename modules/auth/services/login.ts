@@ -2,8 +2,11 @@ import type {
   AuthSession,
 } from "../types/AuthSession";
 
+import type {
+  AuthUser,
+} from "../types/AuthUser";
+
 import {
-  findAuthUserByLoginId,
   saveAuthSession,
 } from "../storage/authStorage";
 
@@ -17,8 +20,21 @@ export interface LoginResult {
   session: AuthSession;
 }
 
-const DEVELOPMENT_PASSWORD =
-  "BravHAS@123";
+interface LoginApiSuccess {
+  success: true;
+
+  user: AuthUser;
+}
+
+interface LoginApiFailure {
+  success: false;
+
+  message: string;
+}
+
+type LoginApiResponse =
+  | LoginApiSuccess
+  | LoginApiFailure;
 
 function createSessionToken(): string {
   return `AUTH-${Date.now()}-${Math.random()
@@ -26,10 +42,10 @@ function createSessionToken(): string {
     .slice(2, 10)}`;
 }
 
-export function login({
+export async function login({
   loginId,
   password,
-}: LoginInput): LoginResult {
+}: LoginInput): Promise<LoginResult> {
   const normalizedLoginId =
     loginId
       .trim()
@@ -47,29 +63,49 @@ export function login({
     );
   }
 
-  const user =
-    findAuthUserByLoginId(
-      normalizedLoginId,
+  const response =
+    await fetch(
+      "/api/auth/login",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+          loginId:
+            normalizedLoginId,
+
+          password,
+        }),
+      },
     );
 
-  if (!user) {
-    throw new Error(
-      "Usuário não encontrado.",
-    );
-  }
+  let data:
+    | LoginApiResponse
+    | null = null;
 
-  if (!user.active) {
+  try {
+    data =
+      (await response.json()) as LoginApiResponse;
+  } catch {
     throw new Error(
-      "Este usuário está inativo.",
+      "Não foi possível processar a resposta de autenticação.",
     );
   }
 
   if (
-    password !==
-    DEVELOPMENT_PASSWORD
+    !response.ok ||
+    !data ||
+    !data.success
   ) {
     throw new Error(
-      "Login ou senha inválidos.",
+      data &&
+      !data.success
+        ? data.message
+        : "Login ou senha inválidos.",
     );
   }
 
@@ -89,7 +125,8 @@ export function login({
     token:
       createSessionToken(),
 
-    user,
+    user:
+      data.user,
 
     authenticated:
       true,

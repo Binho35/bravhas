@@ -99,10 +99,8 @@ export class FinancialAccount {
 
   get isOverdue(): boolean {
     if (
-      this.props.status ===
-        "PAID" ||
-      this.props.status ===
-        "CANCELED"
+      this.props.status === "PAID" ||
+      this.props.status === "CANCELED"
     ) {
       return false;
     }
@@ -135,6 +133,24 @@ export class FinancialAccount {
       );
     }
 
+    if (this.props.status === "CANCELED") {
+      throw new Error(
+        "Não é possível registrar pagamento em uma conta cancelada.",
+      );
+    }
+
+    if (this.props.status === "PAID") {
+      throw new Error(
+        "Não é possível registrar pagamento em uma conta já quitada.",
+      );
+    }
+
+    if (amount > this.outstandingAmount) {
+      throw new Error(
+        "O valor do pagamento não pode ser maior que o saldo em aberto.",
+      );
+    }
+
     const paidAmount =
       this.props.paidAmount +
       amount;
@@ -164,6 +180,16 @@ export class FinancialAccount {
   }
 
   cancel(): FinancialAccount {
+    if (this.props.status === "PAID") {
+      throw new Error(
+        "Não é possível cancelar uma conta já quitada.",
+      );
+    }
+
+    if (this.props.status === "CANCELED") {
+      return this;
+    }
+
     return new FinancialAccount({
       ...this.props,
 

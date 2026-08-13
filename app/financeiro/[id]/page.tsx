@@ -1,25 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-
-import { AppShell } from "@/components/layout/AppShell";
-import { Header } from "@/components/layout/Header";
-import { Sidebar } from "@/components/layout/Sidebar";
-
-import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
-
-import { FinancialActions } from "@/modules/financial/components/FinancialActions";
-import { FinancialDetails } from "@/modules/financial/components/FinancialDetails";
-import { FinancialHistory } from "@/modules/financial/components/FinancialHistory";
-import { FinancialSummary } from "@/modules/financial/components/FinancialSummary";
-import { HarpiaFinancialCard } from "@/modules/financial/components/HarpiaFinancialCard";
-
-import { useFinancialAccount } from "@/modules/financial/hooks/useFinancialAccount";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
-  getFinancialTransactionsByAccount,
-} from "@/modules/financial/storage/financialTransactionStorage";
+  useParams,
+  useRouter,
+} from "next/navigation";
+
+import {
+  AppShell,
+} from "@/components/layout/AppShell";
+
+import {
+  Header,
+} from "@/components/layout/Header";
+
+import {
+  Sidebar,
+} from "@/components/layout/Sidebar";
+
+import {
+  PermissionGuard,
+} from "@/modules/auth/components/PermissionGuard";
+
+import {
+  FinancialActions,
+} from "@/modules/financial/components/FinancialActions";
+
+import {
+  FinancialDetails,
+} from "@/modules/financial/components/FinancialDetails";
+
+import {
+  FinancialHistory,
+} from "@/modules/financial/components/FinancialHistory";
+
+import {
+  FinancialSummary,
+} from "@/modules/financial/components/FinancialSummary";
+
+import {
+  HarpiaFinancialCard,
+} from "@/modules/financial/components/HarpiaFinancialCard";
+
+import {
+  useFinancialAccount,
+} from "@/modules/financial/hooks/useFinancialAccount";
 
 import type {
   FinancialTransaction,
@@ -40,7 +70,9 @@ export default function FinancialAccountPage() {
     transactions,
     setTransactions,
   ] =
-    useState<FinancialTransaction[]>([]);
+    useState<
+      FinancialTransaction[]
+    >([]);
 
   const {
     account,
@@ -50,21 +82,57 @@ export default function FinancialAccountPage() {
     remaining,
     isOverdue,
     onAccountUpdated,
-  } = useFinancialAccount(
-    params.id,
-  );
+  } =
+    useFinancialAccount(
+      params.id,
+    );
 
   const loadTransactions =
-    useCallback(() => {
-      setTransactions(
-        getFinancialTransactionsByAccount(
-          params.id,
-        ),
-      );
-    }, [params.id]);
+    useCallback(
+      async () => {
+        try {
+          const response =
+            await fetch(
+              `/api/financeiro/contas/${params.id}/transacoes`,
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              "Não foi possível carregar o histórico financeiro.",
+            );
+          }
+
+          const data =
+            await response.json();
+
+          if (
+            !data.success ||
+            !Array.isArray(
+              data.transactions,
+            )
+          ) {
+            throw new Error(
+              "Resposta inválida ao carregar o histórico financeiro.",
+            );
+          }
+
+          setTransactions(
+            data.transactions,
+          );
+        } catch (error) {
+          console.error(
+            "Erro ao carregar histórico financeiro:",
+            error,
+          );
+
+          setTransactions([]);
+        }
+      },
+      [params.id],
+    );
 
   useEffect(() => {
-    loadTransactions();
+    void loadTransactions();
   }, [loadTransactions]);
 
   function handleAccountUpdated(
@@ -74,21 +142,20 @@ export default function FinancialAccountPage() {
       updatedAccount,
     );
 
-    loadTransactions();
+    void loadTransactions();
   }
 
   if (loading) {
     return (
       <PermissionGuard
         resource="FINANCIAL"
-        action="VIEW"
       >
         <AppShell
           sidebar={<Sidebar />}
           header={<Header />}
         >
-          <div className="flex h-full items-center justify-center p-5">
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-8 text-center shadow-sm">
+          <div className="flex h-full items-center justify-center">
+            <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
                 Financeiro
               </p>
@@ -110,14 +177,13 @@ export default function FinancialAccountPage() {
     return (
       <PermissionGuard
         resource="FINANCIAL"
-        action="VIEW"
       >
         <AppShell
           sidebar={<Sidebar />}
           header={<Header />}
         >
-          <div className="flex h-full items-center justify-center p-5">
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-8 text-center shadow-sm">
+          <div className="flex h-full items-center justify-center">
+            <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
                 Financeiro
               </p>
@@ -149,7 +215,8 @@ export default function FinancialAccountPage() {
   }
 
   const statusText =
-    account.status === "PAID"
+    account.status ===
+    "PAID"
       ? "Pago"
       : account.status ===
           "PARTIALLY_PAID"
@@ -164,14 +231,13 @@ export default function FinancialAccountPage() {
   return (
     <PermissionGuard
       resource="FINANCIAL"
-      action="VIEW"
     >
       <AppShell
         sidebar={<Sidebar />}
         header={<Header />}
       >
-        <div className="grid h-full grid-rows-[auto_1fr] gap-4 overflow-hidden p-5">
-          <section className="flex items-end justify-between gap-4">
+        <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-4 overflow-hidden p-5">
+          <section className="flex items-end justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
                 Financeiro • Ficha Financeira
