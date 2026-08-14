@@ -6,6 +6,10 @@ import type {
   FinancialAccountRepository,
 } from "../repositories/FinancialAccountRepository";
 
+import {
+  roundCurrency,
+} from "../../utils/currency";
+
 export interface CreateFinancialAccountInput {
   id: string;
 
@@ -23,7 +27,9 @@ export interface CreateFinancialAccountInput {
 
   bankAccountId?: string | null;
 
-  type: "PAYABLE" | "RECEIVABLE";
+  type:
+    | "PAYABLE"
+    | "RECEIVABLE";
 
   description: string;
 
@@ -54,6 +60,51 @@ export class CreateFinancialAccountUseCase {
   async execute(
     input: CreateFinancialAccountInput,
   ): Promise<FinancialAccount> {
+    const id =
+      input.id.trim();
+
+    if (!id) {
+      throw new Error(
+        "O identificador da conta financeira é obrigatório.",
+      );
+    }
+
+    const companyId =
+      input.companyId.trim();
+
+    if (!companyId) {
+      throw new Error(
+        "A empresa é obrigatória.",
+      );
+    }
+
+    const branchId =
+      input.branchId.trim();
+
+    if (!branchId) {
+      throw new Error(
+        "A filial é obrigatória.",
+      );
+    }
+
+    const createdBy =
+      input.createdBy.trim();
+
+    if (!createdBy) {
+      throw new Error(
+        "O responsável pela criação é obrigatório.",
+      );
+    }
+
+    if (
+      input.type !== "PAYABLE" &&
+      input.type !== "RECEIVABLE"
+    ) {
+      throw new Error(
+        "O tipo da conta financeira é inválido.",
+      );
+    }
+
     const description =
       input.description.trim();
 
@@ -64,11 +115,66 @@ export class CreateFinancialAccountUseCase {
     }
 
     if (
-      !Number.isFinite(input.amount) ||
+      !Number.isFinite(
+        input.amount,
+      ) ||
       input.amount <= 0
     ) {
       throw new Error(
         "O valor da conta financeira deve ser maior que zero.",
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        input.discount ?? 0,
+      ) ||
+      (input.discount ?? 0) < 0
+    ) {
+      throw new Error(
+        "O desconto não pode ser negativo.",
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        input.interest ?? 0,
+      ) ||
+      (input.interest ?? 0) < 0
+    ) {
+      throw new Error(
+        "Os juros não podem ser negativos.",
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        input.fine ?? 0,
+      ) ||
+      (input.fine ?? 0) < 0
+    ) {
+      throw new Error(
+        "A multa não pode ser negativa.",
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        input.issueDate.getTime(),
+      )
+    ) {
+      throw new Error(
+        "A data de emissão é inválida.",
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        input.dueDate.getTime(),
+      )
+    ) {
+      throw new Error(
+        "A data de vencimento é inválida.",
       );
     }
 
@@ -86,28 +192,31 @@ export class CreateFinancialAccountUseCase {
 
     const account =
       new FinancialAccount({
-        id: input.id,
+        id,
 
-        companyId:
-          input.companyId,
+        companyId,
 
-        branchId:
-          input.branchId,
+        branchId,
 
         costCenterId:
-          input.costCenterId ?? null,
+          input.costCenterId?.trim() ||
+          null,
 
         categoryId:
-          input.categoryId ?? null,
+          input.categoryId?.trim() ||
+          null,
 
         supplierId:
-          input.supplierId ?? null,
+          input.supplierId?.trim() ||
+          null,
 
         customerId:
-          input.customerId ?? null,
+          input.customerId?.trim() ||
+          null,
 
         bankAccountId:
-          input.bankAccountId ?? null,
+          input.bankAccountId?.trim() ||
+          null,
 
         type:
           input.type,
@@ -131,26 +240,33 @@ export class CreateFinancialAccountUseCase {
           null,
 
         amount:
-          input.amount,
+          roundCurrency(
+            input.amount,
+          ),
 
         paidAmount:
           0,
 
         discount:
-          input.discount ?? 0,
+          roundCurrency(
+            input.discount ?? 0,
+          ),
 
         interest:
-          input.interest ?? 0,
+          roundCurrency(
+            input.interest ?? 0,
+          ),
 
         fine:
-          input.fine ?? 0,
+          roundCurrency(
+            input.fine ?? 0,
+          ),
 
         notes:
           input.notes?.trim() ||
           null,
 
-        createdBy:
-          input.createdBy,
+        createdBy,
 
         updatedBy:
           null,

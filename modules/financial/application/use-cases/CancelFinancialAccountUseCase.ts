@@ -10,14 +10,6 @@ import type {
   FinancialTransactionRepository,
 } from "../repositories/FinancialTransactionRepository";
 
-import {
-  PrismaFinancialAccountRepository,
-} from "../../infrastructure/repositories/PrismaFinancialAccountRepository";
-
-import {
-  PrismaFinancialTransactionRepository,
-} from "../../infrastructure/repositories/PrismaFinancialTransactionRepository";
-
 export interface CancelFinancialAccountInput {
   accountId: string;
 
@@ -36,11 +28,9 @@ export interface CancelFinancialAccountResult {
 
 export class CancelFinancialAccountUseCase {
   constructor(
-    private readonly accountRepository: FinancialAccountRepository =
-      new PrismaFinancialAccountRepository(),
+    private readonly accountRepository: FinancialAccountRepository,
 
-    private readonly transactionRepository: FinancialTransactionRepository =
-      new PrismaFinancialTransactionRepository(),
+    private readonly transactionRepository: FinancialTransactionRepository,
   ) {}
 
   async execute(
@@ -76,7 +66,8 @@ export class CancelFinancialAccountUseCase {
     }
 
     if (
-      account.data.status === "CANCELED"
+      account.data.status ===
+      "CANCELED"
     ) {
       throw new Error(
         "Esta conta já está cancelada.",
@@ -84,7 +75,8 @@ export class CancelFinancialAccountUseCase {
     }
 
     if (
-      account.data.status === "PAID"
+      account.data.status ===
+      "PAID"
     ) {
       throw new Error(
         "Uma conta já liquidada não pode ser cancelada.",

@@ -4,6 +4,14 @@ import {
   ReversePaymentUseCase,
 } from "@/modules/financial/application/use-cases/ReversePaymentUseCase";
 
+import {
+  PrismaFinancialAccountRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
+
+import {
+  PrismaFinancialTransactionRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+
 export async function POST(
   request: Request,
 ) {
@@ -47,8 +55,17 @@ export async function POST(
       );
     }
 
+    const accountRepository =
+      new PrismaFinancialAccountRepository();
+
+    const transactionRepository =
+      new PrismaFinancialTransactionRepository();
+
     const useCase =
-      new ReversePaymentUseCase();
+      new ReversePaymentUseCase(
+        accountRepository,
+        transactionRepository,
+      );
 
     const result =
       await useCase.execute({

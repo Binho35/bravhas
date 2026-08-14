@@ -4,6 +4,14 @@ import {
   RegisterReceiptUseCase,
 } from "@/modules/financial/application/use-cases/RegisterReceiptUseCase";
 
+import {
+  PrismaFinancialAccountRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
+
+import {
+  PrismaFinancialTransactionRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+
 export async function POST(
   request: Request,
 ) {
@@ -43,8 +51,17 @@ export async function POST(
       );
     }
 
+    const accountRepository =
+      new PrismaFinancialAccountRepository();
+
+    const transactionRepository =
+      new PrismaFinancialTransactionRepository();
+
     const useCase =
-      new RegisterReceiptUseCase();
+      new RegisterReceiptUseCase(
+        accountRepository,
+        transactionRepository,
+      );
 
     const result =
       await useCase.execute({

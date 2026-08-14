@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  ListFinancialTransactionsUseCase,
+} from "@/modules/financial/application/use-cases/ListFinancialTransactionsUseCase";
+
+import {
   PrismaFinancialTransactionRepository,
 } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
 
@@ -9,6 +13,14 @@ interface RouteContext {
     id: string;
   }>;
 }
+
+const repository =
+  new PrismaFinancialTransactionRepository();
+
+const listFinancialTransactionsUseCase =
+  new ListFinancialTransactionsUseCase(
+    repository,
+  );
 
 export async function GET(
   _request: Request,
@@ -35,13 +47,10 @@ export async function GET(
       );
     }
 
-    const repository =
-      new PrismaFinancialTransactionRepository();
-
     const transactions =
-      await repository.findAllByAccount(
+      await listFinancialTransactionsUseCase.execute({
         accountId,
-      );
+      });
 
     return NextResponse.json({
       success: true,

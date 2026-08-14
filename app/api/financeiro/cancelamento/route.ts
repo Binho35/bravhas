@@ -4,6 +4,14 @@ import {
   CancelFinancialAccountUseCase,
 } from "@/modules/financial/application/use-cases/CancelFinancialAccountUseCase";
 
+import {
+  PrismaFinancialAccountRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
+
+import {
+  PrismaFinancialTransactionRepository,
+} from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+
 export async function POST(
   request: Request,
 ) {
@@ -38,8 +46,17 @@ export async function POST(
       );
     }
 
+    const accountRepository =
+      new PrismaFinancialAccountRepository();
+
+    const transactionRepository =
+      new PrismaFinancialTransactionRepository();
+
     const useCase =
-      new CancelFinancialAccountUseCase();
+      new CancelFinancialAccountUseCase(
+        accountRepository,
+        transactionRepository,
+      );
 
     const result =
       await useCase.execute({
@@ -60,7 +77,7 @@ export async function POST(
         result.transactionId,
 
       canceledAt:
-        result.canceledAt.toISOString(),
+        result.canceledAt,
     });
   } catch (error) {
     console.error(

@@ -14,7 +14,7 @@ import {
   roundCurrency,
 } from "../../utils/currency";
 
-export interface ReversePaymentInput {
+export interface ReverseReceiptInput {
   accountId: string;
 
   amount?: number;
@@ -24,17 +24,17 @@ export interface ReversePaymentInput {
   reversalDate?: Date;
 }
 
-export interface ReversePaymentResult {
+export interface ReverseReceiptResult {
   account: FinancialAccount;
 
   transactionId: string;
 
   reversedAmount: number;
 
-  remainingPaidAmount: number;
+  remainingReceivedAmount: number;
 }
 
-export class ReversePaymentUseCase {
+export class ReverseReceiptUseCase {
   constructor(
     private readonly accountRepository: FinancialAccountRepository,
 
@@ -42,8 +42,8 @@ export class ReversePaymentUseCase {
   ) {}
 
   async execute(
-    input: ReversePaymentInput,
-  ): Promise<ReversePaymentResult> {
+    input: ReverseReceiptInput,
+  ): Promise<ReverseReceiptResult> {
     const accountId =
       input.accountId.trim();
 
@@ -74,10 +74,11 @@ export class ReversePaymentUseCase {
     }
 
     if (
-      account.data.type !== "PAYABLE"
+      account.data.type !==
+      "RECEIVABLE"
     ) {
       throw new Error(
-        "Este lançamento não é uma conta a pagar.",
+        "Este lançamento não é uma conta a receber.",
       );
     }
 
@@ -90,22 +91,22 @@ export class ReversePaymentUseCase {
       );
     }
 
-    const currentPaidAmount =
+    const currentReceivedAmount =
       roundCurrency(
         account.data.paidAmount,
       );
 
     if (
-      currentPaidAmount <= 0
+      currentReceivedAmount <= 0
     ) {
       throw new Error(
-        "Esta conta não possui valor liquidado para estorno.",
+        "Esta conta não possui valor recebido para estorno.",
       );
     }
 
     const reversedAmount =
       input.amount === undefined
-        ? currentPaidAmount
+        ? currentReceivedAmount
         : roundCurrency(
             input.amount,
           );
@@ -123,17 +124,17 @@ export class ReversePaymentUseCase {
 
     if (
       reversedAmount >
-      currentPaidAmount +
+      currentReceivedAmount +
         0.001
     ) {
       throw new Error(
-        "O valor do estorno é maior que o valor já liquidado.",
+        "O valor do estorno é maior que o valor já recebido.",
       );
     }
 
-    const remainingPaidAmount =
+    const remainingReceivedAmount =
       roundCurrency(
-        currentPaidAmount -
+        currentReceivedAmount -
           reversedAmount,
       );
 
@@ -144,15 +145,15 @@ export class ReversePaymentUseCase {
     const updatedAccount =
       account.update({
         paidAmount:
-          remainingPaidAmount,
+          remainingReceivedAmount,
 
         status:
-          remainingPaidAmount <= 0
+          remainingReceivedAmount <= 0
             ? "OPEN"
             : "PARTIALLY_PAID",
 
         paymentDate:
-          remainingPaidAmount <= 0
+          remainingReceivedAmount <= 0
             ? null
             : account.data.paymentDate,
 
@@ -188,8 +189,8 @@ export class ReversePaymentUseCase {
 
           notes:
             input.amount === undefined
-              ? "Estorno integral da baixa financeira."
-              : "Estorno parcial da baixa financeira.",
+              ? "Estorno integral do recebimento financeiro."
+              : "Estorno parcial do recebimento financeiro.",
         },
       );
 
@@ -202,7 +203,7 @@ export class ReversePaymentUseCase {
 
       reversedAmount,
 
-      remainingPaidAmount,
+      remainingReceivedAmount,
     };
   }
 }

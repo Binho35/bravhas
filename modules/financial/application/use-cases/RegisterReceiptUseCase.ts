@@ -11,14 +11,6 @@ import type {
 } from "../repositories/FinancialTransactionRepository";
 
 import {
-  PrismaFinancialAccountRepository,
-} from "../../infrastructure/repositories/PrismaFinancialAccountRepository";
-
-import {
-  PrismaFinancialTransactionRepository,
-} from "../../infrastructure/repositories/PrismaFinancialTransactionRepository";
-
-import {
   roundCurrency,
 } from "../../utils/currency";
 
@@ -44,11 +36,9 @@ export interface RegisterReceiptResult {
 
 export class RegisterReceiptUseCase {
   constructor(
-    private readonly accountRepository: FinancialAccountRepository =
-      new PrismaFinancialAccountRepository(),
+    private readonly accountRepository: FinancialAccountRepository,
 
-    private readonly transactionRepository: FinancialTransactionRepository =
-      new PrismaFinancialTransactionRepository(),
+    private readonly transactionRepository: FinancialTransactionRepository,
   ) {}
 
   async execute(
