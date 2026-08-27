@@ -351,3 +351,304 @@ model FinancialTransaction {
   @@index([type])
   @@index([performedAt])
 }
+
+enum EmployeeStatus {
+  PRE_ADMISSION
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum EmploymentType {
+  CLT
+  EXPERIENCE
+  INTERN
+  APPRENTICE
+  CONTRACTOR
+  TEMPORARY
+  OTHER
+}
+
+enum WorkMode {
+  ONSITE
+  HYBRID
+  REMOTE
+}
+
+enum HrRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+  COMPLETED
+}
+
+enum HrTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_EMPLOYEE
+  RESOLVED
+  CLOSED
+}
+
+enum DisciplinaryActionType {
+  VERBAL_GUIDANCE
+  WRITTEN_WARNING
+  SUSPENSION
+  TERMINATION_FOR_CAUSE
+}
+
+model HrDepartment {
+  id          String   @id @default(uuid())
+  companyId   String
+  branchId    String?
+  name        String
+  code        String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  positions HrPosition[]
+  employees HrEmployee[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([active])
+}
+
+model HrPosition {
+  id           String   @id @default(uuid())
+  companyId    String
+  departmentId String?
+  name         String
+  cbo          String?
+  description  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department HrDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employees  HrEmployee[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([active])
+}
+
+model HrEmployee {
+  id              String         @id @default(uuid())
+  companyId       String
+  branchId        String?
+  departmentId    String?
+  positionId      String?
+  managerId       String?
+  employeeNumber  String?
+  fullName        String
+  socialName      String?
+  cpf             String?
+  rg              String?
+  birthDate       DateTime?
+  emailPersonal   String?
+  emailCorporate  String?
+  phone           String?
+  hireDate        DateTime?
+  terminationDate DateTime?
+  employmentType  EmploymentType?
+  workMode        WorkMode?
+  weeklyHours     Decimal?       @db.Decimal(6, 2)
+  baseSalary      Decimal?       @db.Decimal(15, 2)
+  status          EmployeeStatus @default(PRE_ADMISSION)
+  active          Boolean        @default(true)
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  department HrDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  position   HrPosition?   @relation(fields: [positionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  manager    HrEmployee?   @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reports    HrEmployee[]  @relation("EmployeeManager")
+
+  documents          HrEmployeeDocument[]
+  timeOccurrences    HrTimeOccurrence[]
+  vacationRequests   HrVacationRequest[]
+  leaveRequests      HrLeaveRequest[]
+  benefitEnrollments HrBenefitEnrollment[]
+  disciplinaryActions HrDisciplinaryAction[]
+  tickets            HrTicket[]
+
+  @@unique([companyId, employeeNumber])
+  @@unique([companyId, cpf])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([departmentId])
+  @@index([positionId])
+  @@index([managerId])
+  @@index([status])
+  @@index([active])
+  @@index([fullName])
+}
+
+model HrEmployeeDocument {
+  id         String   @id @default(uuid())
+  companyId  String
+  employeeId String
+  type       String
+  title      String
+  storageKey String?
+  issuedAt   DateTime?
+  expiresAt  DateTime?
+  verifiedAt DateTime?
+  verifiedBy String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([type])
+  @@index([expiresAt])
+}
+
+model HrTimeOccurrence {
+  id          String          @id @default(uuid())
+  companyId   String
+  employeeId  String
+  referenceDate DateTime
+  type        String
+  description String
+  status      HrRequestStatus @default(PENDING)
+  employeeNote String?
+  managerNote  String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([referenceDate])
+  @@index([status])
+}
+
+model HrVacationRequest {
+  id          String          @id @default(uuid())
+  companyId   String
+  employeeId  String
+  startDate   DateTime
+  endDate     DateTime
+  sellDays    Int             @default(0)
+  advance13th Boolean         @default(false)
+  status      HrRequestStatus @default(PENDING)
+  requestedAt DateTime        @default(now())
+  approvedAt  DateTime?
+  approvedBy  String?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([startDate])
+  @@index([status])
+}
+
+model HrLeaveRequest {
+  id          String          @id @default(uuid())
+  companyId   String
+  employeeId  String
+  type        String
+  startDate   DateTime
+  endDate     DateTime?
+  cid         String?
+  benefitNumber String?
+  status      HrRequestStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([startDate])
+  @@index([status])
+}
+
+model HrBenefitEnrollment {
+  id          String   @id @default(uuid())
+  companyId   String
+  employeeId  String
+  benefitType String
+  provider    String?
+  monthlyValue Decimal? @db.Decimal(15, 2)
+  employeeDiscount Decimal? @db.Decimal(15, 2)
+  active      Boolean  @default(true)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([benefitType])
+  @@index([active])
+}
+
+model HrDisciplinaryAction {
+  id          String                 @id @default(uuid())
+  companyId   String
+  employeeId  String
+  type        DisciplinaryActionType
+  occurredAt  DateTime
+  reason      String
+  description String?
+  issuedBy    String?
+  acknowledgedAt DateTime?
+  documentKey String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([type])
+  @@index([occurredAt])
+}
+
+model HrTicket {
+  id          String         @id @default(uuid())
+  companyId   String
+  employeeId  String?
+  protocol    String         @unique
+  category    String
+  subject     String
+  description String
+  status      HrTicketStatus @default(OPEN)
+  priority    String         @default("NORMAL")
+  assignedTo  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  employee HrEmployee? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
