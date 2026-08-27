@@ -1,6 +1,14 @@
+import { randomBytes } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
+import { prisma } from "@/lib/prisma";
 import { AuthenticateUserUseCase } from "@/modules/auth/application/use-cases/AuthenticateUserUseCase";
+import {
+  hashSessionToken,
+  SESSION_TTL_MS,
+  setSessionCookie,
+} from "@/modules/auth/server/session";
 
 export async function POST(
   request: Request,
@@ -27,9 +35,25 @@ export async function POST(
         password,
       });
 
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = hashSessionToken(token);
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+    await prisma.userSession.create({
+      data: {
+        userId: result.user.id,
+        tokenHash,
+        expiresAt,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    await setSessionCookie(token);
+
     return NextResponse.json({
       success: true,
       user: result.user,
+      expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
     console.error(
