@@ -1,10 +1,13 @@
+import Link from "next/link";
+
 const modules = [
-  ["Ponto e Jornada", "Ocorrências, tratamento, conferência e fechamento"],
-  ["Férias", "Período aquisitivo, programação, aprovação e documentos"],
-  ["Benefícios", "VT, VR/VA, inclusão, exclusão e custos"],
-  ["Folha", "Variáveis, conferência e fechamento da competência"],
-  ["Afastamentos", "Atestados, licenças, retorno e histórico"],
-  ["Desligamentos", "Checklist, documentos, benefícios e encerramentos"],
+  ["Ponto e Jornada", "Ocorrências, tratamento, conferência e fechamento", "/dp/ponto"],
+  ["Férias", "Período aquisitivo, programação, aprovação e documentos", "/dp/ferias"],
+  ["Benefícios", "VT, VR/VA, inclusão, exclusão e custos", "/dp/beneficios"],
+  ["Folha", "Variáveis, conferência e fechamento da competência", "/dp/folha"],
+  ["Afastamentos", "Atestados, licenças, retorno e histórico", "/dp/afastamentos"],
+  ["Medidas disciplinares", "Advertências, suspensões e histórico", "/dp/medidas-disciplinares"],
+  ["Desligamentos", "Checklist, documentos, benefícios e encerramentos", "/dp/desligamentos"],
 ];
 
 export default function DpPage() {
@@ -18,12 +21,12 @@ export default function DpPage() {
         </header>
 
         <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {modules.map(([title, description]) => (
-            <article key={title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-bold">{title}</h2>
+          {modules.map(([title, description, href]) => (
+            <Link key={href} href={href} className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+              <h2 className="text-lg font-bold group-hover:text-blue-800">{title}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-              <div className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Em construção</div>
-            </article>
+              <div className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Abrir módulo →</div>
+            </Link>
           ))}
         </section>
       </div>
