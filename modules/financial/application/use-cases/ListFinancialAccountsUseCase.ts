@@ -7,8 +7,8 @@ import type {
   FindFinancialAccountsFilters,
 } from "../repositories/FinancialAccountRepository";
 
-export interface ListFinancialAccountsInput
-  extends FindFinancialAccountsFilters {}
+export type ListFinancialAccountsInput =
+  FindFinancialAccountsFilters;
 
 export interface ListFinancialAccountsResult {
   accounts: FinancialAccount[];
