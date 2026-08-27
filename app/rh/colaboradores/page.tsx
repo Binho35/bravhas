@@ -29,6 +29,10 @@ async function loadPeopleData() {
     const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
     if (!company) return { employees: [], active: 0, preAdmission: 0, pendingDocs: 0, expiringDocs: 0 };
 
+    const now = new Date();
+    const in30Days = new Date(now);
+    in30Days.setDate(in30Days.getDate() + 30);
+
     const [employees, active, preAdmission, pendingDocs, expiringDocs] = await Promise.all([
       prisma.hrEmployee.findMany({
         where: { companyId: company.id },
@@ -42,7 +46,7 @@ async function loadPeopleData() {
       prisma.hrEmployeeDocument.count({
         where: {
           companyId: company.id,
-          expiresAt: { gte: new Date(), lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+          expiresAt: { gte: now, lte: in30Days },
         },
       }),
     ]);
@@ -115,13 +119,13 @@ export default async function EmployeesPage() {
           ) : (
             <div className="divide-y divide-slate-100">
               {data.employees.map((employee) => (
-                <div key={employee.id} className="grid gap-2 px-6 py-4 text-sm transition hover:bg-slate-50/70 md:grid-cols-[minmax(240px,1.4fr)_1fr_1fr_1fr_130px] md:items-center">
+                <Link key={employee.id} href={`/rh/colaboradores/${employee.id}`} className="grid gap-2 px-6 py-4 text-sm transition hover:bg-slate-50/70 md:grid-cols-[minmax(240px,1.4fr)_1fr_1fr_1fr_130px] md:items-center">
                   <div><p className="font-semibold text-slate-900">{employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{employee.employeeNumber ?? employee.cpf ?? "Sem matrícula"}</p></div>
                   <span className="text-slate-600">{employee.department?.name ?? "—"}</span>
                   <span className="text-slate-600">{employee.position?.name ?? "—"}</span>
                   <span className="text-slate-600">{employee.hireDate ? new Intl.DateTimeFormat("pt-BR").format(employee.hireDate) : "—"}</span>
                   <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[employee.status] ?? statusClass.PRE_ADMISSION}`}>{statusLabel[employee.status] ?? employee.status}</span>
-                </div>
+                </Link>
               ))}
             </div>
           )}
