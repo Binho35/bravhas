@@ -13,6 +13,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { authorizeHrdpMutation } from "@/modules/auth/server/hrdpMutation";
+import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -34,7 +35,7 @@ function decimalText(formData: FormData, key: string) {
 async function createEmployee(formData: FormData) {
   "use server";
 
-  await authorizeHrdpMutation();
+  const actor = await authorizeHrdpMutation();
 
   const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
   if (!company) throw new Error("Empresa ativa não encontrada para o cadastro de colaborador.");
@@ -45,7 +46,7 @@ async function createEmployee(formData: FormData) {
   const employmentType = text(formData, "employmentType") as "CLT" | "EXPERIENCE" | "INTERN" | "APPRENTICE" | "CONTRACTOR" | "TEMPORARY" | "OTHER" | null;
   const workMode = text(formData, "workMode") as "ONSITE" | "HYBRID" | "REMOTE" | null;
 
-  await prisma.hrEmployee.create({
+  const employee = await prisma.hrEmployee.create({
     data: {
       companyId: company.id,
       branchId: text(formData, "branchId"),
@@ -68,6 +69,20 @@ async function createEmployee(formData: FormData) {
       baseSalary: decimalText(formData, "baseSalary"),
       status: text(formData, "status") === "ACTIVE" ? "ACTIVE" : "PRE_ADMISSION",
       notes: text(formData, "notes"),
+    },
+  });
+
+  await logHrdpAudit({
+    companyId: company.id,
+    actorUserId: actor?.id ?? null,
+    action: "EMPLOYEE_CREATED",
+    entityType: "HrEmployee",
+    entityId: employee.id,
+    metadata: {
+      status: employee.status,
+      branchId: employee.branchId,
+      departmentId: employee.departmentId,
+      positionId: employee.positionId,
     },
   });
 
