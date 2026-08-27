@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileHeart,
-  GraduationCap,
   HeartHandshake,
   LayoutDashboard,
   MessageSquareText,
