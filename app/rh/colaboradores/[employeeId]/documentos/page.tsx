@@ -74,7 +74,13 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
   if (!employee) notFound();
 
   const verified = employee.documents.filter((item) => item.verifiedAt).length;
-  const expiring = employee.documents.filter((item) => item.expiresAt && item.expiresAt.getTime() <= Date.now() + 30 * 86400000 && item.expiresAt.getTime() >= Date.now()).length;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiryLimit = new Date(today);
+  expiryLimit.setDate(expiryLimit.getDate() + 30);
+  const expiring = employee.documents.filter(
+    (item) => item.expiresAt && item.expiresAt >= today && item.expiresAt <= expiryLimit,
+  ).length;
 
   return (
     <main className="px-4 py-6 md:px-7 md:py-8">
