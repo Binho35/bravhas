@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { authorizeHrdpMutation } from "@/modules/auth/server/hrdpMutation";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -32,6 +33,8 @@ function decimalText(formData: FormData, key: string) {
 
 async function createEmployee(formData: FormData) {
   "use server";
+
+  await authorizeHrdpMutation();
 
   const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
   if (!company) throw new Error("Empresa ativa não encontrada para o cadastro de colaborador.");
