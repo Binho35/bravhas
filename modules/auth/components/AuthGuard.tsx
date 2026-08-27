@@ -20,6 +20,7 @@ interface AuthGuardProps {
 }
 
 const DEVELOPMENT_PREVIEW_PREFIXES = [
+  "/pessoas",
   "/rh",
   "/dp",
 ];
