@@ -1,3 +1,4 @@
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export interface HrdpAuditInput {
@@ -6,7 +7,7 @@ export interface HrdpAuditInput {
   action: string;
   entityType: string;
   entityId?: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: Prisma.InputJsonValue;
 }
 
 export async function logHrdpAudit(input: HrdpAuditInput) {
@@ -17,7 +18,7 @@ export async function logHrdpAudit(input: HrdpAuditInput) {
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId ?? null,
-      metadata: input.metadata ?? undefined,
+      metadata: input.metadata,
     },
   });
 }
