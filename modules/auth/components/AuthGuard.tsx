@@ -19,6 +19,21 @@ interface AuthGuardProps {
   children: ReactNode;
 }
 
+const DEVELOPMENT_PREVIEW_PREFIXES = [
+  "/rh",
+  "/dp",
+];
+
+function isDevelopmentPreview(pathname: string) {
+  if (process.env.NODE_ENV !== "development") {
+    return false;
+  }
+
+  return DEVELOPMENT_PREVIEW_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export function AuthGuard({
   children,
 }: AuthGuardProps) {
@@ -27,6 +42,9 @@ export function AuthGuard({
 
   const pathname =
     usePathname();
+
+  const previewAllowed =
+    isDevelopmentPreview(pathname);
 
   const [
     checking,
@@ -39,7 +57,7 @@ export function AuthGuard({
   ] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/login") {
+    if (pathname === "/login" || previewAllowed) {
       setAllowed(true);
       setChecking(false);
 
@@ -63,10 +81,11 @@ export function AuthGuard({
     setChecking(false);
   }, [
     pathname,
+    previewAllowed,
     router,
   ]);
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || previewAllowed) {
     return children;
   }
 
