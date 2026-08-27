@@ -24,6 +24,8 @@ interface LoginApiSuccess {
   success: true;
 
   user: AuthUser;
+
+  expiresAt: string;
 }
 
 interface LoginApiFailure {
@@ -35,12 +37,6 @@ interface LoginApiFailure {
 type LoginApiResponse =
   | LoginApiSuccess
   | LoginApiFailure;
-
-function createSessionToken(): string {
-  return `AUTH-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
-}
 
 export async function login({
   loginId,
@@ -109,38 +105,17 @@ export async function login({
     );
   }
 
-  const now =
-    new Date();
-
-  const expiresAt =
-    new Date(
-      now.getTime() +
-        8 *
-          60 *
-          60 *
-          1000,
-    );
+  const now = new Date();
 
   const session: AuthSession = {
-    token:
-      createSessionToken(),
-
-    user:
-      data.user,
-
-    authenticated:
-      true,
-
-    createdAt:
-      now.toISOString(),
-
-    expiresAt:
-      expiresAt.toISOString(),
+    token: "SERVER_COOKIE",
+    user: data.user,
+    authenticated: true,
+    createdAt: now.toISOString(),
+    expiresAt: data.expiresAt,
   };
 
-  saveAuthSession(
-    session,
-  );
+  saveAuthSession(session);
 
   return {
     session,

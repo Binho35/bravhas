@@ -90,8 +90,8 @@ export function useAuth() {
     }
   }
 
-  function signOut(): void {
-    logout();
+  async function signOut(): Promise<void> {
+    await logout();
 
     setSession(null);
 
