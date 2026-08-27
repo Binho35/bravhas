@@ -1,10 +1,12 @@
+import Link from "next/link";
+
 const modules = [
-  ["Colaboradores", "Dossiê, vínculo e histórico funcional"],
-  ["Admissões", "Checklist, documentos e onboarding"],
-  ["Recrutamento", "Vagas, candidatos e etapas"],
-  ["Desempenho", "Avaliações, feedback, 1:1 e PDI"],
-  ["Canal RH", "Atendimento humano e privado ao colaborador"],
-  ["Relatórios", "Headcount, turnover, absenteísmo e indicadores"],
+  ["Colaboradores", "Dossiê, vínculo e histórico funcional", "/rh/colaboradores"],
+  ["Admissões", "Checklist, documentos e onboarding", "/rh/admissoes"],
+  ["Recrutamento", "Vagas, candidatos e etapas", "/rh/recrutamento"],
+  ["Desempenho", "Avaliações, feedback, 1:1 e PDI", "/rh/desempenho"],
+  ["Canal RH", "Atendimento humano e privado ao colaborador", "/rh/canal-rh"],
+  ["Relatórios", "Headcount, turnover, absenteísmo e indicadores", "/rh/relatorios"],
 ];
 
 export default function RhPage() {
@@ -18,12 +20,12 @@ export default function RhPage() {
         </header>
 
         <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {modules.map(([title, description]) => (
-            <article key={title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-bold">{title}</h2>
+          {modules.map(([title, description, href]) => (
+            <Link key={href} href={href} className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+              <h2 className="text-lg font-bold group-hover:text-blue-800">{title}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-              <div className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Em construção</div>
-            </article>
+              <div className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Abrir módulo →</div>
+            </Link>
           ))}
         </section>
       </div>
