@@ -652,3 +652,20 @@ model HrTicket {
   @@index([category])
   @@index([createdAt])
 }
+
+model HrAuditEvent {
+  id         String   @id @default(uuid())
+  companyId  String
+  actorUserId String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([companyId])
+  @@index([actorUserId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+}
