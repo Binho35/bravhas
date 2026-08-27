@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { authorizeHrdpMutation } from "@/modules/auth/server/hrdpMutation";
+import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -18,6 +20,7 @@ function text(formData: FormData, key: string) {
 
 async function createOccurrence(formData: FormData) {
   "use server";
+  const actor = await authorizeHrdpMutation();
   const employeeId = text(formData, "employeeId");
   const referenceDate = text(formData, "referenceDate");
   const type = text(formData, "type");
@@ -27,7 +30,7 @@ async function createOccurrence(formData: FormData) {
   const employee = await prisma.hrEmployee.findUnique({ where: { id: employeeId }, select: { companyId: true } });
   if (!employee) throw new Error("Colaborador não encontrado.");
 
-  await prisma.hrTimeOccurrence.create({
+  const occurrence = await prisma.hrTimeOccurrence.create({
     data: {
       companyId: employee.companyId,
       employeeId,
@@ -39,6 +42,15 @@ async function createOccurrence(formData: FormData) {
     },
   });
 
+  await logHrdpAudit({
+    companyId: employee.companyId,
+    actorUserId: actor?.id ?? null,
+    action: "TIME_OCCURRENCE_CREATED",
+    entityType: "HrTimeOccurrence",
+    entityId: occurrence.id,
+    metadata: { employeeId, type, referenceDate, status: occurrence.status },
+  });
+
   revalidatePath("/dp/ponto");
   revalidatePath("/pessoas");
   revalidatePath(`/rh/colaboradores/${employeeId}`);
@@ -46,6 +58,7 @@ async function createOccurrence(formData: FormData) {
 
 async function reviewOccurrence(formData: FormData) {
   "use server";
+  const actor = await authorizeHrdpMutation();
   const id = text(formData, "id");
   const employeeId = text(formData, "employeeId");
   const decision = text(formData, "decision");
@@ -54,7 +67,7 @@ async function reviewOccurrence(formData: FormData) {
   if (!id || !employeeId || !decision) throw new Error("Tratamento de ocorrência inválido.");
   if (!["APPROVED", "REJECTED", "COMPLETED"].includes(decision)) throw new Error("Decisão inválida.");
 
-  await prisma.hrTimeOccurrence.update({
+  const occurrence = await prisma.hrTimeOccurrence.update({
     where: { id },
     data: {
       status: decision as "APPROVED" | "REJECTED" | "COMPLETED",
@@ -62,6 +75,16 @@ async function reviewOccurrence(formData: FormData) {
       reviewedBy,
       reviewedAt: new Date(),
     },
+    select: { companyId: true, employeeId: true, status: true },
+  });
+
+  await logHrdpAudit({
+    companyId: occurrence.companyId,
+    actorUserId: actor?.id ?? null,
+    action: "TIME_OCCURRENCE_REVIEWED",
+    entityType: "HrTimeOccurrence",
+    entityId: id,
+    metadata: { employeeId: occurrence.employeeId, decision: occurrence.status },
   });
 
   revalidatePath("/dp/ponto");
