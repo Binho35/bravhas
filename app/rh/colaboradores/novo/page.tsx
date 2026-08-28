@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
-import { authorizeHrdpMutation } from "@/modules/auth/server/hrdpMutation";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
@@ -35,24 +35,43 @@ function decimalText(formData: FormData, key: string) {
 async function createEmployee(formData: FormData) {
   "use server";
 
-  const actor = await authorizeHrdpMutation();
-
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  if (!company) throw new Error("Empresa ativa não encontrada para o cadastro de colaborador.");
+  const actor = await hrdpPermission.colaboradores("create");
 
   const fullName = text(formData, "fullName");
   if (!fullName) throw new Error("Nome completo é obrigatório.");
+
+  const branchId = text(formData, "branchId");
+  const departmentId = text(formData, "departmentId");
+  const positionId = text(formData, "positionId");
+  const managerId = text(formData, "managerId");
+
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId: actor.companyId, active: true }, select: { id: true } });
+    if (!branch) throw new Error("Unidade inválida ou fora do escopo autorizado.");
+  }
+  if (departmentId) {
+    const department = await prisma.hrDepartment.findFirst({ where: { id: departmentId, companyId: actor.companyId, active: true }, select: { id: true } });
+    if (!department) throw new Error("Departamento inválido ou fora do escopo autorizado.");
+  }
+  if (positionId) {
+    const position = await prisma.hrPosition.findFirst({ where: { id: positionId, companyId: actor.companyId, active: true }, select: { id: true } });
+    if (!position) throw new Error("Cargo inválido ou fora do escopo autorizado.");
+  }
+  if (managerId) {
+    const manager = await prisma.hrEmployee.findFirst({ where: { id: managerId, companyId: actor.companyId, active: true }, select: { id: true } });
+    if (!manager) throw new Error("Gestor inválido ou fora do escopo autorizado.");
+  }
 
   const employmentType = text(formData, "employmentType") as "CLT" | "EXPERIENCE" | "INTERN" | "APPRENTICE" | "CONTRACTOR" | "TEMPORARY" | "OTHER" | null;
   const workMode = text(formData, "workMode") as "ONSITE" | "HYBRID" | "REMOTE" | null;
 
   const employee = await prisma.hrEmployee.create({
     data: {
-      companyId: company.id,
-      branchId: text(formData, "branchId"),
-      departmentId: text(formData, "departmentId"),
-      positionId: text(formData, "positionId"),
-      managerId: text(formData, "managerId"),
+      companyId: actor.companyId,
+      branchId,
+      departmentId,
+      positionId,
+      managerId,
       employeeNumber: text(formData, "employeeNumber"),
       fullName,
       socialName: text(formData, "socialName"),
@@ -67,14 +86,15 @@ async function createEmployee(formData: FormData) {
       workMode,
       weeklyHours: decimalText(formData, "weeklyHours"),
       baseSalary: decimalText(formData, "baseSalary"),
-      status: text(formData, "status") === "ACTIVE" ? "ACTIVE" : "PRE_ADMISSION",
+      status: "PRE_ADMISSION",
+      active: true,
       notes: text(formData, "notes"),
     },
   });
 
   await logHrdpAudit({
-    companyId: company.id,
-    actorUserId: actor?.id ?? null,
+    companyId: actor.companyId,
+    actorUserId: actor.id,
     action: "EMPLOYEE_CREATED",
     entityType: "HrEmployee",
     entityId: employee.id,
@@ -88,7 +108,8 @@ async function createEmployee(formData: FormData) {
 
   revalidatePath("/rh/colaboradores");
   revalidatePath("/pessoas");
-  redirect("/rh/colaboradores");
+  revalidatePath("/rh/admissoes");
+  redirect(`/rh/colaboradores/${employee.id}`);
 }
 
 const Field = ({ name, label, placeholder, type = "text", required = false }: { name: string; label: string; placeholder: string; type?: string; required?: boolean }) => (
@@ -106,17 +127,15 @@ const SelectField = ({ name, label, children }: { name: string; label: string; c
 );
 
 export default async function NewEmployeePage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  const companyId = company?.id;
+  const actor = await hrdpPermission.colaboradores("view");
+  const companyId = actor.companyId;
 
-  const [branches, departments, positions, managers] = companyId
-    ? await Promise.all([
-        prisma.branch.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-        prisma.hrDepartment.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-        prisma.hrPosition.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-        prisma.hrEmployee.findMany({ where: { companyId, active: true, status: "ACTIVE" }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
-      ])
-    : [[], [], [], []];
+  const [branches, departments, positions, managers] = await Promise.all([
+    prisma.branch.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.hrDepartment.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.hrPosition.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.hrEmployee.findMany({ where: { companyId, active: true, status: "ACTIVE" }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
+  ]);
 
   return (
     <main className="px-4 py-6 text-slate-950 md:px-7 md:py-8">
@@ -124,7 +143,7 @@ export default async function NewEmployeePage() {
         <Link href="/rh/colaboradores" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-[#154b7a]"><ArrowLeft className="h-4 w-4" /> Voltar para colaboradores</Link>
 
         <div className="mt-5 flex flex-col justify-between gap-5 md:flex-row md:items-end">
-          <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">People Core</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0b2947]">Novo colaborador</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Cadastro único para RH e DP. Os dados desta ficha passam a compor o histórico funcional do colaborador.</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">People Core</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0b2947]">Novo colaborador</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Cadastro único para RH e DP. Novos registros entram obrigatoriamente em pré-admissão e só ficam ativos após conferência documental.</p></div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-800">Persistência protegida pelo People Core</div>
         </div>
 
@@ -144,7 +163,7 @@ export default async function NewEmployeePage() {
           </section>
 
           <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><BriefcaseBusiness className="h-5 w-5" /></div><div><h2 className="font-bold">Vínculo e contrato</h2><p className="text-xs text-slate-500">Dados admissionais, status, remuneração e jornada contratada.</p></div></div>
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><BriefcaseBusiness className="h-5 w-5" /></div><div><h2 className="font-bold">Vínculo e contrato</h2><p className="text-xs text-slate-500">Dados admissionais, remuneração e jornada contratada.</p></div></div>
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               <Field name="hireDate" label="Data de admissão" placeholder="" type="date" />
               <SelectField name="employmentType" label="Tipo de contrato"><option value="">Selecione</option><option value="CLT">CLT</option><option value="EXPERIENCE">Experiência</option><option value="INTERN">Estágio</option><option value="APPRENTICE">Aprendiz</option><option value="CONTRACTOR">Prestador</option><option value="TEMPORARY">Temporário</option><option value="OTHER">Outro</option></SelectField>
@@ -152,7 +171,7 @@ export default async function NewEmployeePage() {
               <Field name="baseSalary" label="Salário base" placeholder="0,00" />
               <Field name="weeklyHours" label="Carga horária semanal" placeholder="44" />
               <SelectField name="workMode" label="Regime de trabalho"><option value="">Selecione</option><option value="ONSITE">Presencial</option><option value="HYBRID">Híbrido</option><option value="REMOTE">Remoto</option></SelectField>
-              <SelectField name="status" label="Situação inicial"><option value="PRE_ADMISSION">Pré-admissão</option><option value="ACTIVE">Ativo</option></SelectField>
+              <label className="block"><span className="text-xs font-semibold text-slate-600">Situação inicial</span><div className="mt-2 flex h-11 items-center rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700">Pré-admissão</div></label>
             </div>
           </section>
 
@@ -168,7 +187,7 @@ export default async function NewEmployeePage() {
 
           <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
             <article className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3"><FileText className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold">Observações e documentos</h2><p className="text-xs text-slate-500">Informações complementares para conferência do RH/DP.</p></div></div><label className="mt-5 block"><span className="text-xs font-semibold text-slate-600">Observações internas</span><textarea name="notes" rows={5} placeholder="Registre apenas informações necessárias ao processo de RH/DP." className="mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-50" /></label></article>
-            <aside className="rounded-3xl border border-blue-100 bg-[#eef6fc] p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-sm"><BadgeCheck className="h-5 w-5" /></div><h3 className="mt-4 font-bold text-[#0b2947]">Cadastro mestre</h3><p className="mt-2 text-sm leading-6 text-slate-600">Após salvar, o colaborador passa a estar disponível para departamento, cargo, gestor, documentos, ponto, férias, benefícios, afastamentos e demais rotinas.</p></aside>
+            <aside className="rounded-3xl border border-blue-100 bg-[#eef6fc] p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-sm"><BadgeCheck className="h-5 w-5" /></div><h3 className="mt-4 font-bold text-[#0b2947]">Cadastro mestre</h3><p className="mt-2 text-sm leading-6 text-slate-600">Após salvar, o colaborador entra em pré-admissão. A ativação exige a conferência dos dados e documentos no fluxo de admissões.</p></aside>
           </section>
 
           <div className="flex flex-col-reverse justify-end gap-3 pb-8 sm:flex-row"><Link href="/rh/colaboradores" className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-600">Cancelar</Link><button type="submit" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/10 transition hover:bg-[#154b7a]"><Save className="h-4 w-4" />Salvar colaborador</button></div>
