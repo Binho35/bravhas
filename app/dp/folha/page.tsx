@@ -1,20 +1,21 @@
 import { CalendarCheck2, CheckCircle2, Clock3, FileSpreadsheet } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 
 export default async function PayrollPage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  const companyId = company?.id;
+  const actor = await hrdpPermission.folha("view");
+  const companyId = actor.companyId;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  const [activeEmployees, pendingPoint, leaves, vacations, benefits] = companyId ? await Promise.all([
+  const [activeEmployees, pendingPoint, leaves, vacations, benefits] = await Promise.all([
     prisma.hrEmployee.count({ where: { companyId, active: true, status: "ACTIVE" } }),
     prisma.hrTimeOccurrence.count({ where: { companyId, referenceDate: { gte: monthStart, lte: monthEnd }, status: { in: ["PENDING", "DRAFT"] } } }),
     prisma.hrLeaveRequest.count({ where: { companyId, startDate: { lte: monthEnd }, OR: [{ endDate: null }, { endDate: { gte: monthStart } }] } }),
     prisma.hrVacationRequest.count({ where: { companyId, startDate: { lte: monthEnd }, endDate: { gte: monthStart }, status: { in: ["APPROVED", "COMPLETED"] } } }),
     prisma.hrBenefitEnrollment.count({ where: { companyId, active: true } }),
-  ]) : [0, 0, 0, 0, 0];
+  ]);
   const competence = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(now);
   const readiness = pendingPoint === 0 ? "Pronta para conferência" : "Com pendências";
   const items = [
