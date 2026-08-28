@@ -16,7 +16,7 @@ async function assignProfile(formData:FormData){
   const valid=await prisma.$queryRawUnsafe<{id:string;name:string}[]>(`SELECT p."id",p."name" FROM "AccessProfile" p JOIN "User" u ON u."companyId"=p."companyId" WHERE p."id"=$1 AND u."id"=$2 AND u."companyId"=$3 LIMIT 1`,profileId,userId,actor.companyId);
   if(!valid[0])throw new Error("Usuário ou perfil inválido.");
   await prisma.$executeRawUnsafe(`INSERT INTO "UserAccessProfile" ("userId","profileId") VALUES ($1,$2) ON CONFLICT ("userId") DO UPDATE SET "profileId"=$2`,userId,profileId);
-  await auditAccessChange({companyId:actor.companyId,actorUserId:actor.id,event:"ACCESS_PROFILE_ASSIGNED",entityId:userId,metadata:{profileId,profileName:valid[0].name}});
+  await auditAccessChange({companyId:actor.companyId,actorUserId:actor.id,action:"ACCESS_PROFILE_ASSIGNED",entityId:userId,metadata:{profileId,profileName:valid[0].name}});
   revalidatePath("/rh/configuracoes/acessos");
 }
 
