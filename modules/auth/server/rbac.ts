@@ -13,15 +13,12 @@ const actionColumn: Record<RbacAction, keyof PermissionRow> = { view:"canView", 
 export async function requirePermission(resource: RbacResource, action: RbacAction) {
   const user = await getServerAuthUser();
   if (!user) {
-    if (process.env.NODE_ENV === "development" && process.env.BRAVHAS_DEV_AUTH_BYPASS !== "false") {
-      throw new Error("Bypass de desenvolvimento exige uma sessão autenticada para operações RBAC com escopo de empresa.");
-    }
     throw new Error("Sessão inválida ou expirada.");
   }
 
   if (user.role === "OWNER" || user.role === "ADMIN") return user;
 
-  const rows = await prisma.$queryRawUnsafe<PermissionRow[]>(`SELECT p."master", a."canView", a."canCreate", a."canEdit", a."canApprove", a."canDelete", a."canExport" FROM "UserAccessProfile" u JOIN "AccessProfile" p ON p."id"=u."profileId" LEFT JOIN "AccessPermission" a ON a."profileId"=p."id" AND a."resource"=$1 WHERE u."userId"=$2 AND p."active"=true LIMIT 1`, resource, user.id);
+  const rows = await prisma.$queryRawUnsafe<PermissionRow[]>(`SELECT p."master", a."canView", a."canCreate", a."canEdit", a."canApprove", a."canDelete", a."canExport" FROM "UserAccessProfile" u JOIN "AccessProfile" p ON p."id"=u."profileId" LEFT JOIN "AccessPermission" a ON a."profileId"=p."id" AND a."resource"=$1 WHERE u."userId"=$2 AND p."companyId"=$3 AND p."active"=true LIMIT 1`, resource, user.id, user.companyId);
   const permission = rows[0];
   if (!permission || (!permission.master && !permission[actionColumn[action]])) throw new Error("Usuário sem permissão para esta operação.");
   return user;
