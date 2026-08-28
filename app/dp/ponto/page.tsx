@@ -48,7 +48,7 @@ async function createOccurrence(formData: FormData) {
     action: "TIME_OCCURRENCE_CREATED",
     entityType: "HrTimeOccurrence",
     entityId: occurrence.id,
-    metadata: { employeeId, type, referenceDate },
+    metadata: { employeeId, type, referenceDate, status: occurrence.status },
   });
 
   revalidatePath("/dp/ponto");
