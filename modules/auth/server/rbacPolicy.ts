@@ -1,13 +1,55 @@
 import { prisma } from "@/lib/prisma";
 import { getServerAuthUser } from "./session";
 
-export async function assertEmployeeScope(employeeId:string){
-  const user=await getServerAuthUser();
-  if(!user) throw new Error("Sessão inválida ou expirada.");
-  const employee=await prisma.hrEmployee.findFirst({where:{id:employeeId,companyId:user.companyId},select:{id:true,managerId:true}});
-  if(!employee) throw new Error("Colaborador fora do escopo autorizado.");
-  if(user.role==="OWNER"||user.role==="ADMIN"||user.role==="HR"||user.role==="PAYROLL") return employee;
-  // Usuários operacionais nunca podem atravessar a fronteira da empresa. O vínculo por gestor
-  // será endurecido quando User e HrEmployee tiverem identidade funcional explicitamente associada.
+type LinkedEmployeeRow = { employeeId: string };
+
+export async function assertEmployeeScope(employeeId: string) {
+  const user = await getServerAuthUser();
+  if (!user) throw new Error("Sessão inválida ou expirada.");
+
+  const employee = await prisma.hrEmployee.findFirst({
+    where: { id: employeeId, companyId: user.companyId },
+    select: { id: true, managerId: true },
+  });
+  if (!employee) throw new Error("Colaborador fora do escopo autorizado.");
+
+  if (user.role === "OWNER" || user.role === "ADMIN" || user.role === "HR" || user.role === "PAYROLL") {
+    return employee;
+  }
+
+  const links = await prisma.$queryRawUnsafe<LinkedEmployeeRow[]>(
+    `SELECT "employeeId" FROM "UserEmployeeLink" WHERE "userId"=$1 AND "companyId"=$2 LIMIT 1`,
+    user.id,
+    user.companyId,
+  );
+  const linkedEmployeeId = links[0]?.employeeId;
+  if (!linkedEmployeeId) throw new Error("Usuário operacional sem vínculo funcional configurado.");
+
+  if (employee.id !== linkedEmployeeId && employee.managerId !== linkedEmployeeId) {
+    throw new Error("Colaborador fora da equipe autorizada para este gestor.");
+  }
+
   return employee;
+}
+
+export async function getEmployeeScopeWhere() {
+  const user = await getServerAuthUser();
+  if (!user) throw new Error("Sessão inválida ou expirada.");
+
+  if (user.role === "OWNER" || user.role === "ADMIN" || user.role === "HR" || user.role === "PAYROLL") {
+    return { companyId: user.companyId };
+  }
+
+  const links = await prisma.$queryRawUnsafe<LinkedEmployeeRow[]>(
+    `SELECT "employeeId" FROM "UserEmployeeLink" WHERE "userId"=$1 AND "companyId"=$2 LIMIT 1`,
+    user.id,
+    user.companyId,
+  );
+  const linkedEmployeeId = links[0]?.employeeId;
+  if (!linkedEmployeeId) throw new Error("Usuário operacional sem vínculo funcional configurado.");
+
+  return {
+    companyId: user.companyId,
+    OR: [{ id: linkedEmployeeId }, { managerId: linkedEmployeeId }],
+  };
 }
