@@ -5,6 +5,7 @@ import { ArrowLeft, BadgeCheck, BriefcaseBusiness, CalendarDays, FileText, Heart
 
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import { assertEmployeeScope } from "@/modules/auth/server/rbacPolicy";
 
 const statusLabel: Record<string, string> = { PRE_ADMISSION: "Pré-admissão", ACTIVE: "Ativo", ON_LEAVE: "Afastado", TERMINATED: "Desligado" };
 const statusClass: Record<string, string> = { PRE_ADMISSION: "bg-amber-50 text-amber-700 ring-amber-100", ACTIVE: "bg-emerald-50 text-emerald-700 ring-emerald-100", ON_LEAVE: "bg-blue-50 text-blue-700 ring-blue-100", TERMINATED: "bg-slate-100 text-slate-600 ring-slate-200" };
@@ -14,6 +15,7 @@ function moneyLabel(value: { toString(): string } | null | undefined) { if (!val
 export default async function EmployeeDossierPage({ params }: { params: Promise<{ employeeId: string }> }) {
   const actor = await hrdpPermission.colaboradores("view");
   const { employeeId } = await params;
+  await assertEmployeeScope(employeeId);
   const employee = await prisma.hrEmployee.findFirst({
     where: { id: employeeId, companyId: actor.companyId },
     include: {
