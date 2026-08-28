@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import { MessageSquareText, Plus, ShieldCheck } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -10,47 +12,58 @@ function text(formData: FormData, key: string) {
 
 async function createTicket(formData: FormData) {
   "use server";
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  if (!company) throw new Error("Empresa ativa não encontrada.");
+  const actor = await hrdpPermission.canalRh("create");
   const category = text(formData, "category");
   const subject = text(formData, "subject");
   const description = text(formData, "description");
   if (!category || !subject || !description) throw new Error("Categoria, assunto e descrição são obrigatórios.");
 
+  const employeeId = text(formData, "employeeId");
+  if (employeeId) {
+    const employee = await prisma.hrEmployee.findFirst({ where: { id: employeeId, companyId: actor.companyId, active: true }, select: { id: true } });
+    if (!employee) throw new Error("Colaborador fora do escopo autorizado.");
+  }
+
   const protocol = `RH-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`;
-  await prisma.hrTicket.create({
+  const ticket = await prisma.hrTicket.create({
     data: {
-      companyId: company.id,
-      employeeId: text(formData, "employeeId"),
+      companyId: actor.companyId,
+      employeeId,
       protocol,
       category,
       subject,
       description,
       priority: text(formData, "priority") ?? "NORMAL",
-      assignedTo: text(formData, "assignedTo"),
+      assignedTo: text(formData, "assignedTo") ?? actor.name,
     },
   });
 
+  await logHrdpAudit({ companyId: actor.companyId, actorUserId: actor.id, action: "HR_TICKET_CREATED", entityType: "HrTicket", entityId: ticket.id, metadata: { protocol, category } });
   revalidatePath("/rh/canal-rh");
   revalidatePath("/pessoas");
 }
 
 async function updateTicket(formData: FormData) {
   "use server";
+  const actor = await hrdpPermission.canalRh("edit");
   const id = text(formData, "id");
   const status = text(formData, "status");
   if (!id || !status) throw new Error("Protocolo inválido.");
   if (!["OPEN", "IN_PROGRESS", "WAITING_EMPLOYEE", "RESOLVED", "CLOSED"].includes(status)) throw new Error("Status inválido.");
 
+  const ticket = await prisma.hrTicket.findFirst({ where: { id, companyId: actor.companyId, category: { notIn: ["RECRUTAMENTO", "DESEMPENHO"] } }, select: { id: true, protocol: true } });
+  if (!ticket) throw new Error("Protocolo fora do escopo autorizado.");
+
   await prisma.hrTicket.update({
     where: { id },
     data: {
       status: status as "OPEN" | "IN_PROGRESS" | "WAITING_EMPLOYEE" | "RESOLVED" | "CLOSED",
-      assignedTo: text(formData, "assignedTo"),
+      assignedTo: text(formData, "assignedTo") ?? actor.name,
       resolvedAt: ["RESOLVED", "CLOSED"].includes(status) ? new Date() : null,
     },
   });
 
+  await logHrdpAudit({ companyId: actor.companyId, actorUserId: actor.id, action: "HR_TICKET_STATUS_CHANGED", entityType: "HrTicket", entityId: id, metadata: { protocol: ticket.protocol, status } });
   revalidatePath("/rh/canal-rh");
   revalidatePath("/pessoas");
 }
@@ -72,20 +85,18 @@ const statusClass: Record<string, string> = {
 };
 
 export default async function HrChannelPage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  const companyId = company?.id;
+  const actor = await hrdpPermission.canalRh("view");
+  const companyId = actor.companyId;
 
-  const [employees, tickets] = companyId
-    ? await Promise.all([
-        prisma.hrEmployee.findMany({ where: { companyId, active: true }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
-        prisma.hrTicket.findMany({
-          where: { companyId, category: { notIn: ["RECRUTAMENTO", "DESEMPENHO"] } },
-          orderBy: { createdAt: "desc" },
-          take: 80,
-          include: { employee: { select: { fullName: true } } },
-        }),
-      ])
-    : [[], []];
+  const [employees, tickets] = await Promise.all([
+    prisma.hrEmployee.findMany({ where: { companyId, active: true }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
+    prisma.hrTicket.findMany({
+      where: { companyId, category: { notIn: ["RECRUTAMENTO", "DESEMPENHO"] } },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      include: { employee: { select: { fullName: true } } },
+    }),
+  ]);
 
   const open = tickets.filter((item) => item.status === "OPEN" || item.status === "IN_PROGRESS").length;
   const waiting = tickets.filter((item) => item.status === "WAITING_EMPLOYEE").length;
