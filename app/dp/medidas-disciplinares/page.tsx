@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import { AlertTriangle, FileWarning, Plus } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -10,26 +12,30 @@ function text(formData: FormData, key: string) {
 
 async function createAction(formData: FormData) {
   "use server";
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  if (!company) throw new Error("Empresa ativa não encontrada.");
+  const actor = await hrdpPermission.medidasDisciplinares("create");
   const employeeId = text(formData, "employeeId");
   const type = text(formData, "type") as "VERBAL_GUIDANCE" | "WRITTEN_WARNING" | "SUSPENSION" | "TERMINATION_FOR_CAUSE" | null;
   const occurredAt = text(formData, "occurredAt");
   const reason = text(formData, "reason");
   if (!employeeId || !type || !occurredAt || !reason) throw new Error("Preencha os campos obrigatórios.");
 
-  await prisma.hrDisciplinaryAction.create({
+  const employee = await prisma.hrEmployee.findFirst({ where: { id: employeeId, companyId: actor.companyId, active: true }, select: { id: true } });
+  if (!employee) throw new Error("Colaborador fora do escopo autorizado.");
+
+  const created = await prisma.hrDisciplinaryAction.create({
     data: {
-      companyId: company.id,
+      companyId: actor.companyId,
       employeeId,
       type,
       occurredAt: new Date(`${occurredAt}T12:00:00`),
       reason,
       description: text(formData, "description"),
-      issuedBy: text(formData, "issuedBy"),
+      issuedBy: actor.name,
       documentKey: text(formData, "documentKey"),
     },
   });
+
+  await logHrdpAudit({ companyId: actor.companyId, actorUserId: actor.id, action: "DISCIPLINARY_ACTION_CREATED", entityType: "HrDisciplinaryAction", entityId: created.id, metadata: { employeeId, type } });
 
   revalidatePath("/dp/medidas-disciplinares");
   revalidatePath("/pessoas");
@@ -38,11 +44,16 @@ async function createAction(formData: FormData) {
 
 async function acknowledgeAction(formData: FormData) {
   "use server";
+  const actor = await hrdpPermission.medidasDisciplinares("approve");
   const id = text(formData, "id");
   const employeeId = text(formData, "employeeId");
   if (!id || !employeeId) throw new Error("Medida disciplinar inválida.");
 
+  const action = await prisma.hrDisciplinaryAction.findFirst({ where: { id, employeeId, companyId: actor.companyId }, select: { id: true } });
+  if (!action) throw new Error("Medida disciplinar fora do escopo autorizado.");
+
   await prisma.hrDisciplinaryAction.update({ where: { id }, data: { acknowledgedAt: new Date() } });
+  await logHrdpAudit({ companyId: actor.companyId, actorUserId: actor.id, action: "DISCIPLINARY_ACTION_ACKNOWLEDGED", entityType: "HrDisciplinaryAction", entityId: id, metadata: { employeeId } });
   revalidatePath("/dp/medidas-disciplinares");
   revalidatePath(`/rh/colaboradores/${employeeId}`);
 }
@@ -55,12 +66,12 @@ const typeLabel: Record<string, string> = {
 };
 
 export default async function DisciplinaryPage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  const companyId = company?.id;
-  const [employees, actions] = companyId ? await Promise.all([
+  const actor = await hrdpPermission.medidasDisciplinares("view");
+  const companyId = actor.companyId;
+  const [employees, actions] = await Promise.all([
     prisma.hrEmployee.findMany({ where: { companyId, active: true }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
     prisma.hrDisciplinaryAction.findMany({ where: { companyId }, orderBy: { occurredAt: "desc" }, take: 80, include: { employee: { select: { id: true, fullName: true } } } }),
-  ]) : [[], []];
+  ]);
 
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const monthCount = actions.filter((item) => item.occurredAt >= monthStart).length;
@@ -76,7 +87,6 @@ export default async function DisciplinaryPage() {
         <select name="type" required className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm"><option value="">Tipo de medida</option><option value="VERBAL_GUIDANCE">Orientação verbal</option><option value="WRITTEN_WARNING">Advertência escrita</option><option value="SUSPENSION">Suspensão</option><option value="TERMINATION_FOR_CAUSE">Justa causa</option></select>
         <input name="occurredAt" type="date" required className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm"/>
         <input name="reason" required placeholder="Motivo objetivo" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm"/>
-        <input name="issuedBy" placeholder="Responsável pela aplicação" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm"/>
         <input name="documentKey" placeholder="Referência do documento assinado" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm"/>
         <textarea name="description" rows={4} placeholder="Descrição dos fatos e evidências" className="w-full rounded-2xl border border-slate-200 p-4 text-sm"/>
         <button className="h-11 w-full rounded-2xl bg-[#0b2947] text-sm font-semibold text-white">Registrar medida</button>
