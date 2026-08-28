@@ -5,14 +5,16 @@ import { PrismaClient } from "../lib/generated/prisma/client";
 import { hashPassword } from "../modules/auth/server/password";
 
 const connectionString = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
-const loginId = process.env.BRAVHAS_PASSWORD_LOGIN?.trim();
-const password = process.env.BRAVHAS_PASSWORD_VALUE;
+const configuredLoginId = process.env.BRAVHAS_PASSWORD_LOGIN?.trim();
+const configuredPassword = process.env.BRAVHAS_PASSWORD_VALUE;
 
 if (!connectionString) throw new Error("DATABASE_DIRECT_URL ou DATABASE_URL precisa estar configurada.");
-if (!loginId || !password) {
+if (!configuredLoginId || !configuredPassword) {
   throw new Error("Defina BRAVHAS_PASSWORD_LOGIN e BRAVHAS_PASSWORD_VALUE para provisionar a credencial.");
 }
 
+const loginId: string = configuredLoginId;
+const password: string = configuredPassword;
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
