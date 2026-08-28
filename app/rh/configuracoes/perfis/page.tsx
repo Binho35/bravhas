@@ -26,7 +26,7 @@ async function savePermissions(formData: FormData) {
   await auditAccessChange({
     companyId: actor.companyId,
     actorUserId: actor.id,
-    event: "ACCESS_PERMISSIONS_UPDATED",
+    action: "ACCESS_PERMISSIONS_UPDATED",
     entityId: profileId,
     metadata: { profileName: profile.name },
   });
