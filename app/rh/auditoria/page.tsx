@@ -20,15 +20,20 @@ export default async function HrdpAuditPage() {
     where: { companyId: actor.companyId },
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: {
-      actorUser: {
-        select: {
-          name: true,
-          loginId: true,
-        },
-      },
-    },
   });
+
+  const actorIds = Array.from(
+    new Set(events.map((event) => event.actorUserId).filter((id): id is string => Boolean(id))),
+  );
+
+  const users = actorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: actorIds }, companyId: actor.companyId },
+        select: { id: true, name: true, loginId: true },
+      })
+    : [];
+
+  const usersById = new Map(users.map((user) => [user.id, user]));
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
@@ -65,29 +70,32 @@ export default async function HrdpAuditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {events.map((event) => (
-                  <tr key={event.id} className="align-top hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">
-                      {event.createdAt.toLocaleString("pt-BR")}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">
-                        {event.actorUser?.name ?? "Sistema"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {event.actorUser?.loginId ?? event.actorUserId ?? "—"}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-slate-800">{event.action}</td>
-                    <td className="px-5 py-4 text-slate-700">{event.entityType}</td>
-                    <td className="max-w-48 break-all px-5 py-4 text-xs text-slate-500">
-                      {event.entityId ?? "—"}
-                    </td>
-                    <td className="max-w-md break-words px-5 py-4 font-mono text-xs text-slate-500">
-                      {formatMetadata(event.metadata)}
-                    </td>
-                  </tr>
-                ))}
+                {events.map((event) => {
+                  const eventActor = event.actorUserId ? usersById.get(event.actorUserId) : null;
+                  return (
+                    <tr key={event.id} className="align-top hover:bg-slate-50/70">
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-600">
+                        {event.createdAt.toLocaleString("pt-BR")}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="font-medium text-slate-900">
+                          {eventActor?.name ?? "Sistema"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {eventActor?.loginId ?? event.actorUserId ?? "—"}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-slate-800">{event.action}</td>
+                      <td className="px-5 py-4 text-slate-700">{event.entityType}</td>
+                      <td className="max-w-48 break-all px-5 py-4 text-xs text-slate-500">
+                        {event.entityId ?? "—"}
+                      </td>
+                      <td className="max-w-md break-words px-5 py-4 font-mono text-xs text-slate-500">
+                        {formatMetadata(event.metadata)}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {events.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
