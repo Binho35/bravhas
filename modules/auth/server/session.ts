@@ -39,7 +39,10 @@ export async function getServerAuthUser() {
 }
 
 export async function requireServerRole(allowedRoles: AuthUserRole[]) {
-  if (process.env.NODE_ENV === "development" && process.env.BRAVHAS_DEV_AUTH_BYPASS !== "false") {
+  const developmentBypassEnabled =
+    process.env.NODE_ENV === "development" && process.env.BRAVHAS_DEV_AUTH_BYPASS === "true";
+
+  if (developmentBypassEnabled) {
     return null;
   }
 
