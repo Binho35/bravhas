@@ -3,15 +3,15 @@ import { revalidatePath } from "next/cache";
 import { ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultAccessProfiles, RBAC_RESOURCES } from "@/modules/auth/server/rbac";
-import { requireServerRole } from "@/modules/auth/server/session";
+import { requireMasterAccess } from "@/modules/auth/server/masterAccess";
+import { auditAccessChange } from "@/modules/auth/server/rbacAudit";
 
 type Profile = { id:string; name:string; description:string|null; master:boolean; active:boolean };
 type Permission = { profileId:string; resource:string; canView:boolean; canCreate:boolean; canEdit:boolean; canApprove:boolean; canDelete:boolean; canExport:boolean };
 
 async function savePermissions(formData: FormData) {
   "use server";
-  const actor = await requireServerRole(["OWNER","ADMIN"]);
-  if (!actor) throw new Error("Autenticação necessária para alterar permissões.");
+  const actor = await requireMasterAccess();
   const profileId = String(formData.get("profileId") ?? "");
   const profiles = await prisma.$queryRawUnsafe<Profile[]>(`SELECT "id","name","description","master","active" FROM "AccessProfile" WHERE "id"=$1 AND "companyId"=$2 LIMIT 1`, profileId, actor.companyId);
   const profile = profiles[0];
@@ -22,12 +22,20 @@ async function savePermissions(formData: FormData) {
     const flag = (action:string) => formData.get(`${resource}:${action}`) === "on";
     await prisma.$executeRawUnsafe(`INSERT INTO "AccessPermission" ("id","profileId","resource","canView","canCreate","canEdit","canApprove","canDelete","canExport","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) ON CONFLICT ("profileId","resource") DO UPDATE SET "canView"=$4,"canCreate"=$5,"canEdit"=$6,"canApprove"=$7,"canDelete"=$8,"canExport"=$9,"updatedAt"=NOW()`, randomUUID(), profileId, resource, flag("view"), flag("create"), flag("edit"), flag("approve"), flag("delete"), flag("export"));
   }
+
+  await auditAccessChange({
+    companyId: actor.companyId,
+    actorUserId: actor.id,
+    event: "ACCESS_PERMISSIONS_UPDATED",
+    entityId: profileId,
+    metadata: { profileName: profile.name },
+  });
+
   revalidatePath("/rh/configuracoes/perfis");
 }
 
 export default async function AccessProfilesPage() {
-  const actor = await requireServerRole(["OWNER","ADMIN"]);
-  if (!actor) return <main className="p-8">Autenticação necessária.</main>;
+  const actor = await requireMasterAccess();
   await ensureDefaultAccessProfiles(actor.companyId);
   const profiles = await prisma.$queryRawUnsafe<Profile[]>(`SELECT "id","name","description","master","active" FROM "AccessProfile" WHERE "companyId"=$1 ORDER BY "master" DESC,"name" ASC`, actor.companyId);
   const permissions = await prisma.$queryRawUnsafe<Permission[]>(`SELECT a."profileId",a."resource",a."canView",a."canCreate",a."canEdit",a."canApprove",a."canDelete",a."canExport" FROM "AccessPermission" a JOIN "AccessProfile" p ON p."id"=a."profileId" WHERE p."companyId"=$1`, actor.companyId);
