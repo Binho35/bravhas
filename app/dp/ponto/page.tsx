@@ -45,11 +45,10 @@ async function createOccurrence(formData: FormData) {
   await logHrdpAudit({
     companyId: actor.companyId,
     actorUserId: actor.id,
-    event: "TIME_OCCURRENCE_CREATED",
-    entity: "HrTimeOccurrence",
+    action: "TIME_OCCURRENCE_CREATED",
+    entityType: "HrTimeOccurrence",
     entityId: occurrence.id,
-    employeeId,
-    metadata: { type, referenceDate },
+    metadata: { employeeId, type, referenceDate },
   });
 
   revalidatePath("/dp/ponto");
@@ -83,11 +82,10 @@ async function reviewOccurrence(formData: FormData) {
   await logHrdpAudit({
     companyId: actor.companyId,
     actorUserId: actor.id,
-    event: "TIME_OCCURRENCE_REVIEWED",
-    entity: "HrTimeOccurrence",
+    action: "TIME_OCCURRENCE_REVIEWED",
+    entityType: "HrTimeOccurrence",
     entityId: id,
-    employeeId,
-    metadata: { from: occurrence.status, to: decision },
+    metadata: { employeeId, from: occurrence.status, to: decision },
   });
 
   revalidatePath("/dp/ponto");
