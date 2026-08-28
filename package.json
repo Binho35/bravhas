@@ -9,7 +9,7 @@
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "prisma generate && node prisma/seed.mjs",
+    "db:seed": "prisma generate && npx --yes tsx prisma/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "seed": "npm run db:seed"
   },
