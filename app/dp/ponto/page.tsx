@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
-import { authorizeHrdpMutation } from "@/modules/auth/server/hrdpMutation";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
@@ -20,19 +20,19 @@ function text(formData: FormData, key: string) {
 
 async function createOccurrence(formData: FormData) {
   "use server";
-  const actor = await authorizeHrdpMutation();
+  const actor = await hrdpPermission.ponto("create");
   const employeeId = text(formData, "employeeId");
   const referenceDate = text(formData, "referenceDate");
   const type = text(formData, "type");
   const description = text(formData, "description");
   if (!employeeId || !referenceDate || !type || !description) throw new Error("Colaborador, data, tipo e descrição são obrigatórios.");
 
-  const employee = await prisma.hrEmployee.findUnique({ where: { id: employeeId }, select: { companyId: true } });
-  if (!employee) throw new Error("Colaborador não encontrado.");
+  const employee = await prisma.hrEmployee.findFirst({ where: { id: employeeId, companyId: actor.companyId }, select: { id: true } });
+  if (!employee) throw new Error("Colaborador não encontrado ou fora do escopo autorizado.");
 
   const occurrence = await prisma.hrTimeOccurrence.create({
     data: {
-      companyId: employee.companyId,
+      companyId: actor.companyId,
       employeeId,
       referenceDate: new Date(`${referenceDate}T12:00:00`),
       type,
@@ -43,8 +43,8 @@ async function createOccurrence(formData: FormData) {
   });
 
   await logHrdpAudit({
-    companyId: employee.companyId,
-    actorUserId: actor?.id ?? null,
+    companyId: actor.companyId,
+    actorUserId: actor.id,
     action: "TIME_OCCURRENCE_CREATED",
     entityType: "HrTimeOccurrence",
     entityId: occurrence.id,
@@ -58,33 +58,34 @@ async function createOccurrence(formData: FormData) {
 
 async function reviewOccurrence(formData: FormData) {
   "use server";
-  const actor = await authorizeHrdpMutation();
+  const actor = await hrdpPermission.ponto("approve");
   const id = text(formData, "id");
   const employeeId = text(formData, "employeeId");
   const decision = text(formData, "decision");
   const managerNote = text(formData, "managerNote");
-  const reviewedBy = text(formData, "reviewedBy") ?? "RH/DP";
   if (!id || !employeeId || !decision) throw new Error("Tratamento de ocorrência inválido.");
   if (!["APPROVED", "REJECTED", "COMPLETED"].includes(decision)) throw new Error("Decisão inválida.");
 
-  const occurrence = await prisma.hrTimeOccurrence.update({
+  const occurrence = await prisma.hrTimeOccurrence.findFirst({ where: { id, employeeId, companyId: actor.companyId }, select: { id: true, status: true } });
+  if (!occurrence) throw new Error("Ocorrência não encontrada ou fora do escopo autorizado.");
+
+  await prisma.hrTimeOccurrence.update({
     where: { id },
     data: {
       status: decision as "APPROVED" | "REJECTED" | "COMPLETED",
       managerNote,
-      reviewedBy,
+      reviewedBy: actor.name ?? actor.email,
       reviewedAt: new Date(),
     },
-    select: { companyId: true, employeeId: true, status: true },
   });
 
   await logHrdpAudit({
-    companyId: occurrence.companyId,
-    actorUserId: actor?.id ?? null,
+    companyId: actor.companyId,
+    actorUserId: actor.id,
     action: "TIME_OCCURRENCE_REVIEWED",
     entityType: "HrTimeOccurrence",
     entityId: id,
-    metadata: { employeeId: occurrence.employeeId, decision: occurrence.status },
+    metadata: { employeeId, from: occurrence.status, to: decision },
   });
 
   revalidatePath("/dp/ponto");
@@ -110,26 +111,24 @@ const statusClass: Record<string, string> = {
 };
 
 export default async function AttendancePage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true } });
-  const companyId = company?.id;
+  const actor = await hrdpPermission.ponto("view");
+  const companyId = actor.companyId;
 
-  const [employees, occurrences, pending, completed] = companyId
-    ? await Promise.all([
-        prisma.hrEmployee.findMany({
-          where: { companyId, active: true, status: { in: ["ACTIVE", "ON_LEAVE"] } },
-          orderBy: { fullName: "asc" },
-          select: { id: true, fullName: true, employeeNumber: true },
-        }),
-        prisma.hrTimeOccurrence.findMany({
-          where: { companyId },
-          orderBy: [{ referenceDate: "desc" }, { createdAt: "desc" }],
-          take: 80,
-          include: { employee: { select: { id: true, fullName: true, employeeNumber: true } } },
-        }),
-        prisma.hrTimeOccurrence.count({ where: { companyId, status: "PENDING" } }),
-        prisma.hrTimeOccurrence.count({ where: { companyId, status: { in: ["APPROVED", "COMPLETED"] } } }),
-      ])
-    : [[], [], 0, 0];
+  const [employees, occurrences, pending, completed] = await Promise.all([
+    prisma.hrEmployee.findMany({
+      where: { companyId, active: true, status: { in: ["ACTIVE", "ON_LEAVE"] } },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, employeeNumber: true },
+    }),
+    prisma.hrTimeOccurrence.findMany({
+      where: { companyId },
+      orderBy: [{ referenceDate: "desc" }, { createdAt: "desc" }],
+      take: 80,
+      include: { employee: { select: { id: true, fullName: true, employeeNumber: true } } },
+    }),
+    prisma.hrTimeOccurrence.count({ where: { companyId, status: "PENDING" } }),
+    prisma.hrTimeOccurrence.count({ where: { companyId, status: { in: ["APPROVED", "COMPLETED"] } } }),
+  ]);
 
   const today = new Date();
   const todayCount = occurrences.filter((item) => item.referenceDate.toDateString() === today.toDateString()).length;
@@ -165,7 +164,7 @@ export default async function AttendancePage() {
 
           <article className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
             <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">Tratamento diário</p><h2 className="mt-1 text-lg font-bold text-[#0b2947]">Ocorrências registradas</h2></div><CalendarDays className="h-5 w-5 text-[#154b7a]" /></div>
-            {occurrences.length === 0 ? <div className="px-6 py-14 text-center"><ClipboardCheck className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-4 font-semibold text-slate-700">Nenhuma ocorrência registrada</p><p className="mt-2 text-sm text-slate-500">As ocorrências de ponto aparecerão aqui para tratamento.</p></div> : <div className="divide-y divide-slate-100">{occurrences.map((item) => <div key={item.id} className="p-5"><div className="grid gap-3 md:grid-cols-[110px_minmax(180px,1fr)_150px_minmax(200px,1.2fr)] md:items-start"><span className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.referenceDate)}</span><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{requestLabel[item.status] ?? item.status}</span><div><p className="text-sm font-semibold text-slate-700">{item.type}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>{item.employeeNote ? <p className="mt-2 text-xs text-slate-600"><strong>Justificativa:</strong> {item.employeeNote}</p> : null}</div></div>{item.status === "PENDING" ? <form action={reviewOccurrence} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[1fr_140px_120px_120px]"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><input name="managerNote" placeholder="Parecer do gestor/RH" className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs" /><input name="reviewedBy" placeholder="Responsável" defaultValue="RH/DP" className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs" /><button name="decision" value="APPROVED" className="h-9 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white">Aprovar</button><button name="decision" value="REJECTED" className="h-9 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-400"><span>Tratado por: {item.reviewedBy ?? "—"}</span><span>Em: {item.reviewedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.reviewedAt) : "—"}</span>{item.managerNote ? <span>Parecer: {item.managerNote}</span> : null}</div>}</div>)}</div>}
+            {occurrences.length === 0 ? <div className="px-6 py-14 text-center"><ClipboardCheck className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-4 font-semibold text-slate-700">Nenhuma ocorrência registrada</p><p className="mt-2 text-sm text-slate-500">As ocorrências de ponto aparecerão aqui para tratamento.</p></div> : <div className="divide-y divide-slate-100">{occurrences.map((item) => <div key={item.id} className="p-5"><div className="grid gap-3 md:grid-cols-[110px_minmax(180px,1fr)_150px_minmax(200px,1.2fr)] md:items-start"><span className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.referenceDate)}</span><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{requestLabel[item.status] ?? item.status}</span><div><p className="text-sm font-semibold text-slate-700">{item.type}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>{item.employeeNote ? <p className="mt-2 text-xs text-slate-600"><strong>Justificativa:</strong> {item.employeeNote}</p> : null}</div></div>{item.status === "PENDING" ? <form action={reviewOccurrence} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[1fr_120px_120px]"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><input name="managerNote" placeholder="Parecer do gestor/RH" className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs" /><button name="decision" value="APPROVED" className="h-9 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white">Aprovar</button><button name="decision" value="REJECTED" className="h-9 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-400"><span>Tratado por: {item.reviewedBy ?? "—"}</span><span>Em: {item.reviewedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.reviewedAt) : "—"}</span>{item.managerNote ? <span>Parecer: {item.managerNote}</span> : null}</div>}</div>)}</div>}
           </article>
         </section>
       </div>

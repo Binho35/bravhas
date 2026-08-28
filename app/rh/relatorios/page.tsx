@@ -1,13 +1,15 @@
 import { Activity, CalendarDays, FileWarning, Headphones, UserMinus, UserPlus, UsersRound } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 
 function pct(value: number) {
   return `${value.toFixed(1).replace(".", ",")}%`;
 }
 
 export default async function HrReportsPage() {
-  const company = await prisma.company.findFirst({ where: { active: true }, select: { id: true, name: true } });
+  const actor = await hrdpPermission.relatorios("view");
+  const company = await prisma.company.findFirst({ where: { id: actor.companyId, active: true }, select: { id: true, name: true } });
 
   if (!company) {
     return (
