@@ -3,34 +3,38 @@ import { BadgeCheck, FileText, Filter, Search, UserPlus, UsersRound } from "luci
 
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import { getEmployeeScopeWhere } from "@/modules/auth/server/rbacPolicy";
 
 const statusLabel: Record<string, string> = { PRE_ADMISSION: "Pré-admissão", ACTIVE: "Ativo", ON_LEAVE: "Afastado", TERMINATED: "Desligado" };
 const statusClass: Record<string, string> = { PRE_ADMISSION: "bg-amber-50 text-amber-700 ring-amber-100", ACTIVE: "bg-emerald-50 text-emerald-700 ring-emerald-100", ON_LEAVE: "bg-blue-50 text-blue-700 ring-blue-100", TERMINATED: "bg-slate-100 text-slate-600 ring-slate-200" };
 const validStatuses = ["PRE_ADMISSION", "ACTIVE", "ON_LEAVE", "TERMINATED"] as const;
 type EmployeeStatusFilter = (typeof validStatuses)[number];
 
-async function loadPeopleData(companyId: string, q: string, status: string) {
+async function loadPeopleData(q: string, status: string) {
+  const scope = await getEmployeeScopeWhere();
   const now = new Date();
   const in30Days = new Date(now);
   in30Days.setDate(in30Days.getDate() + 30);
   const normalizedStatus = validStatuses.includes(status as EmployeeStatusFilter) ? status as EmployeeStatusFilter : undefined;
   const search = q.trim();
-  const [employees, active, preAdmission, pendingDocs, expiringDocs] = await Promise.all([
-    prisma.hrEmployee.findMany({ where: { companyId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(search ? { OR: [{ fullName: { contains: search, mode: "insensitive" } }, { cpf: { contains: search } }, { employeeNumber: { contains: search, mode: "insensitive" } }, { emailCorporate: { contains: search, mode: "insensitive" } }, { emailPersonal: { contains: search, mode: "insensitive" } }, { department: { name: { contains: search, mode: "insensitive" } } }, { position: { name: { contains: search, mode: "insensitive" } } }] } : {}) }, orderBy: { fullName: "asc" }, take: 100, include: { department: true, position: true } }),
-    prisma.hrEmployee.count({ where: { companyId, status: "ACTIVE" } }),
-    prisma.hrEmployee.count({ where: { companyId, status: "PRE_ADMISSION" } }),
-    prisma.hrEmployeeDocument.count({ where: { companyId, verifiedAt: null } }),
-    prisma.hrEmployeeDocument.count({ where: { companyId, expiresAt: { gte: now, lte: in30Days } } }),
-  ]);
-  return { employees, active, preAdmission, pendingDocs, expiringDocs };
+  const employeeWhere = { ...scope, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(search ? { AND: [{ OR: [{ fullName: { contains: search, mode: "insensitive" as const } }, { cpf: { contains: search } }, { employeeNumber: { contains: search, mode: "insensitive" as const } }, { emailCorporate: { contains: search, mode: "insensitive" as const } }, { emailPersonal: { contains: search, mode: "insensitive" as const } }, { department: { name: { contains: search, mode: "insensitive" as const } } }, { position: { name: { contains: search, mode: "insensitive" as const } } }] }] } : {}) };
+  const visibleEmployees = await prisma.hrEmployee.findMany({ where: employeeWhere, orderBy: { fullName: "asc" }, take: 100, include: { department: true, position: true } });
+  const visibleIds = visibleEmployees.map((item) => item.id);
+  const active = visibleEmployees.filter((item) => item.status === "ACTIVE").length;
+  const preAdmission = visibleEmployees.filter((item) => item.status === "PRE_ADMISSION").length;
+  const [pendingDocs, expiringDocs] = visibleIds.length > 0 ? await Promise.all([
+    prisma.hrEmployeeDocument.count({ where: { employeeId: { in: visibleIds }, companyId: scope.companyId, verifiedAt: null } }),
+    prisma.hrEmployeeDocument.count({ where: { employeeId: { in: visibleIds }, companyId: scope.companyId, expiresAt: { gte: now, lte: in30Days } } }),
+  ]) : [0, 0];
+  return { employees: visibleEmployees, active, preAdmission, pendingDocs, expiringDocs };
 }
 
 export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
-  const actor = await hrdpPermission.colaboradores("view");
+  await hrdpPermission.colaboradores("view");
   const params = await searchParams;
   const q = params.q ?? "";
   const status = params.status ?? "";
-  const data = await loadPeopleData(actor.companyId, q, status);
+  const data = await loadPeopleData(q, status);
   const summary = [["Colaboradores ativos", String(data.active), "Base consolidada"], ["Pré-admissões", String(data.preAdmission), "Aguardando conclusão"], ["Pendências cadastrais", String(data.pendingDocs), "Conferência RH/DP"], ["Documentos a vencer", String(data.expiringDocs), "Próximos 30 dias"]];
 
   return <main className="px-4 py-6 text-slate-950 md:px-7 md:py-8"><div className="mx-auto max-w-[1360px]">
