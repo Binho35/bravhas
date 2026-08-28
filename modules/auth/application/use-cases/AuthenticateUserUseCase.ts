@@ -1,6 +1,6 @@
 import type { AuthUser } from "../../types/AuthUser";
-
 import { PrismaUserRepository } from "../../infrastructure/repositories/PrismaUserRepository";
+import { verifyPassword } from "../../server/password";
 
 export interface AuthenticateUserInput {
   loginId: string;
@@ -11,63 +11,31 @@ export interface AuthenticateUserResult {
   user: AuthUser;
 }
 
-const DEVELOPMENT_PASSWORD =
-  "BravHAS@123";
+const INVALID_CREDENTIALS = "Login ou senha inválidos.";
 
 export class AuthenticateUserUseCase {
   constructor(
-    private readonly userRepository =
-      new PrismaUserRepository(),
+    private readonly userRepository = new PrismaUserRepository(),
   ) {}
 
-  async execute(
-    input: AuthenticateUserInput,
-  ): Promise<AuthenticateUserResult> {
-    const normalizedLoginId =
-      input.loginId
-        .trim()
-        .toLowerCase();
+  async execute(input: AuthenticateUserInput): Promise<AuthenticateUserResult> {
+    const normalizedLoginId = input.loginId.trim().toLowerCase();
+    const password = input.password;
 
-    if (!normalizedLoginId) {
-      throw new Error(
-        "Informe o login.",
-      );
+    if (!normalizedLoginId || !password) {
+      throw new Error(INVALID_CREDENTIALS);
     }
 
-    if (!input.password.trim()) {
-      throw new Error(
-        "Informe a senha.",
-      );
+    const user = await this.userRepository.findByLoginId(normalizedLoginId);
+    if (!user || !user.active) {
+      throw new Error(INVALID_CREDENTIALS);
     }
 
-    const user =
-      await this.userRepository.findByLoginId(
-        normalizedLoginId,
-      );
-
-    if (!user) {
-      throw new Error(
-        "Usuário não encontrado.",
-      );
+    const passwordHash = await this.userRepository.findPasswordHashById(user.id);
+    if (!passwordHash || !verifyPassword(password, passwordHash)) {
+      throw new Error(INVALID_CREDENTIALS);
     }
 
-    if (!user.active) {
-      throw new Error(
-        "Este usuário está inativo.",
-      );
-    }
-
-    if (
-      input.password !==
-      DEVELOPMENT_PASSWORD
-    ) {
-      throw new Error(
-        "Login ou senha inválidos.",
-      );
-    }
-
-    return {
-      user,
-    };
+    return { user };
   }
 }
