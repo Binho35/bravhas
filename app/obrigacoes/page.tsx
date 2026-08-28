@@ -11,6 +11,22 @@ import { PermissionGuard } from "@/modules/auth/components/PermissionGuard";
 
 import type { ObligationArea, ObligationPriority, ObligationStatus } from "@/modules/obligations/domain/entities/Obligation";
 
+interface ObligationApiItem {
+  id: string;
+  title: string;
+  description: string | null;
+  area: ObligationArea;
+  priority: ObligationPriority;
+  status: ObligationStatus;
+  responsibleName: string;
+  dueDate: string;
+  completedAt: string | null;
+  notes: string | null;
+  recurrence: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ObligationListItem {
   id: string;
   title: string;
@@ -109,8 +125,9 @@ export default function ObligationsPage() {
           throw new Error(data?.message ?? "Não foi possível carregar as obrigações.");
         }
         if (!cancelled) {
+          const items = data.obligations as ObligationApiItem[];
           setObligations(
-            data.obligations.map((item: any) => ({
+            items.map((item) => ({
               ...item,
               dueDate: new Date(item.dueDate),
               completedAt: item.completedAt ? new Date(item.completedAt) : null,
