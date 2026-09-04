@@ -70,6 +70,7 @@ jobs:
           ! grep -R "BRAVHAS_DEV_AUTH_BYPASS.*true" app modules lib --include='*.ts' --include='*.tsx'
           ! grep -R "localStorage" modules/auth modules/financial modules/obligations app --include='*.ts' --include='*.tsx'
           ! grep -R "npx --yes tsx" package.json .github scripts prisma --include='*.json' --include='*.yml' --include='*.yaml' --include='*.ts'
+          ! grep -R -E '\$(queryRawUnsafe|executeRawUnsafe)' app modules scripts --include='*.ts' --include='*.tsx'
           grep -q 'createHash("sha256")' modules/auth/server/session.ts
           grep -q 'httpOnly: true' modules/auth/server/session.ts
           grep -q 'sameSite: "lax"' modules/auth/server/session.ts
