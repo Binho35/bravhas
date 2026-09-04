@@ -124,4 +124,42 @@ test.describe("tenant isolation and negative RBAC", () => {
     expect(body.obligation.responsibleUserId).toBe(fixture.alpha.ownerId);
     expect(body.obligation.createdBy).toBe(fixture.alpha.ownerId);
   });
+
+  test("beta tenant cannot read or update a valid alpha obligation id", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+
+    const created = await page.request.post("/api/obrigacoes", {
+      data: {
+        title: "E2E Alpha cross-tenant obligation",
+        area: "ADMINISTRATIVE",
+        priority: "MEDIUM",
+        status: "PENDING",
+        recurrence: "NONE",
+        dueDate: "2026-10-12T12:00:00.000Z",
+        responsibleName: "E2E Alpha Owner",
+      },
+    });
+    expect(created.ok()).toBe(true);
+    const createdBody = await created.json();
+    const alphaObligationId = String(createdBody.obligation.id);
+
+    const logoutResponse = await page.request.post("/api/auth/logout");
+    expect(logoutResponse.ok()).toBe(true);
+    await login(page, fixture.beta.ownerLogin, fixture.beta.password);
+
+    const foreignRead = await page.request.get(`/api/obrigacoes/${alphaObligationId}`);
+    expect(foreignRead.status()).toBe(404);
+    const readBody = await foreignRead.json();
+    expect(readBody.message).toBe("Obrigação não encontrada.");
+
+    const foreignUpdate = await page.request.put(`/api/obrigacoes/${alphaObligationId}`, {
+      data: {
+        title: "E2E Beta attempted overwrite",
+        status: "COMPLETED",
+      },
+    });
+    expect(foreignUpdate.status()).toBe(404);
+    const updateBody = await foreignUpdate.json();
+    expect(updateBody.message).toBe("Obrigação não encontrada.");
+  });
 });
