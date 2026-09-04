@@ -19,7 +19,7 @@ async function collectFiles(relativeDir) {
   async function walk(dir) {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (["node_modules", ".next", ".git"].includes(entry.name)) continue;
+      if (["node_modules", ".next", ".git", "generated"].includes(entry.name)) continue;
       const absolute = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(absolute);
       else if (/\.(ts|tsx|js|mjs|cjs|json|yml|yaml)$/.test(entry.name)) files.push(absolute);
@@ -42,8 +42,11 @@ for (const expected of [
 ]) requireText(nextConfig, expected, "next.config.ts");
 
 const envExample = await read(".env.example");
-for (const expected of ["DATABASE_URL=", "DATABASE_DIRECT_URL=", "BRAVHAS_ENV=", "BRAVHAS_DEV_AUTH_BYPASS=false"]) {
+for (const expected of ["DATABASE_URL=", "DATABASE_DIRECT_URL=", "BRAVHAS_ENV="]) {
   requireText(envExample, expected, ".env.example");
+}
+if (!/^BRAVHAS_DEV_AUTH_BYPASS=(?:"false"|'false'|false)$/m.test(envExample)) {
+  failures.push(".env.example: BRAVHAS_DEV_AUTH_BYPASS deve permanecer false");
 }
 
 const readme = await read("README.md");
