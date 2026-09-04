@@ -9,10 +9,10 @@
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "prisma generate && npx --yes tsx prisma/seed.ts",
+    "db:seed": "prisma generate && tsx prisma/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "seed": "npm run db:seed",
-    "auth:set-password": "prisma generate && npx --yes tsx scripts/set-user-password.ts"
+    "auth:set-password": "prisma generate && tsx scripts/set-user-password.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -38,6 +38,7 @@
     "eslint-config-next": "16.3.0",
     "prisma": "^7.9.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   },
   "overrides": {
