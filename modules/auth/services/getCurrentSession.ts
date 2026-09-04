@@ -1,68 +1,33 @@
-import type {
-  AuthSession,
-} from "../types/AuthSession";
-
-import {
-  clearAuthSession,
-  getStoredAuthSession,
-} from "../storage/authStorage";
+import type { AuthSession } from "../types/AuthSession";
 
 export interface GetCurrentSessionResult {
   session: AuthSession | null;
-
   authenticated: boolean;
 }
 
-export function getCurrentSession(): GetCurrentSessionResult {
-  const session =
-    getStoredAuthSession();
+type SessionApiResponse =
+  | { authenticated: true; session: AuthSession }
+  | { authenticated: false; session: null };
 
-  if (!session) {
-    return {
-      session: null,
-      authenticated: false,
-    };
+export async function getCurrentSession(): Promise<GetCurrentSessionResult> {
+  try {
+    const response = await fetch("/api/auth/session", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+      return { session: null, authenticated: false };
+    }
+
+    const data = (await response.json()) as SessionApiResponse;
+    if (!data.authenticated || !data.session?.user?.active) {
+      return { session: null, authenticated: false };
+    }
+
+    return { session: data.session, authenticated: true };
+  } catch {
+    return { session: null, authenticated: false };
   }
-
-  if (!session.authenticated) {
-    clearAuthSession();
-
-    return {
-      session: null,
-      authenticated: false,
-    };
-  }
-
-  const expiresAt =
-    new Date(
-      session.expiresAt,
-    ).getTime();
-
-  if (
-    !Number.isFinite(
-      expiresAt,
-    ) ||
-    expiresAt <= Date.now()
-  ) {
-    clearAuthSession();
-
-    return {
-      session: null,
-      authenticated: false,
-    };
-  }
-
-  if (!session.user.active) {
-    clearAuthSession();
-
-    return {
-      session: null,
-      authenticated: false,
-    };
-  }
-
-  return {
-    session,
-    authenticated: true,
-  };
 }
