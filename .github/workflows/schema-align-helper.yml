@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_schema_check
+  DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/bravhas_schema_check
+  SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_schema_shadow
+
 jobs:
   align:
     runs-on: ubuntu-latest
