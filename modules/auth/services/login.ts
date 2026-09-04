@@ -1,18 +1,8 @@
-import type {
-  AuthSession,
-} from "../types/AuthSession";
-
-import type {
-  AuthUser,
-} from "../types/AuthUser";
-
-import {
-  saveAuthSession,
-} from "../storage/authStorage";
+import type { AuthSession } from "../types/AuthSession";
+import type { AuthUser } from "../types/AuthUser";
 
 export interface LoginInput {
   loginId: string;
-
   password: string;
 }
 
@@ -22,102 +12,55 @@ export interface LoginResult {
 
 interface LoginApiSuccess {
   success: true;
-
   user: AuthUser;
-
   expiresAt: string;
 }
 
 interface LoginApiFailure {
   success: false;
-
   message: string;
 }
 
-type LoginApiResponse =
-  | LoginApiSuccess
-  | LoginApiFailure;
+type LoginApiResponse = LoginApiSuccess | LoginApiFailure;
 
-export async function login({
-  loginId,
-  password,
-}: LoginInput): Promise<LoginResult> {
-  const normalizedLoginId =
-    loginId
-      .trim()
-      .toLowerCase();
+export async function login({ loginId, password }: LoginInput): Promise<LoginResult> {
+  const normalizedLoginId = loginId.trim().toLowerCase();
 
   if (!normalizedLoginId) {
-    throw new Error(
-      "Informe o login.",
-    );
+    throw new Error("Informe o login.");
   }
 
   if (!password.trim()) {
-    throw new Error(
-      "Informe a senha.",
-    );
+    throw new Error("Informe a senha.");
   }
 
-  const response =
-    await fetch(
-      "/api/auth/login",
-      {
-        method: "POST",
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ loginId: normalizedLoginId, password }),
+  });
 
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          loginId:
-            normalizedLoginId,
-
-          password,
-        }),
-      },
-    );
-
-  let data:
-    | LoginApiResponse
-    | null = null;
+  let data: LoginApiResponse | null = null;
 
   try {
-    data =
-      (await response.json()) as LoginApiResponse;
+    data = (await response.json()) as LoginApiResponse;
   } catch {
-    throw new Error(
-      "Não foi possível processar a resposta de autenticação.",
-    );
+    throw new Error("Não foi possível processar a resposta de autenticação.");
   }
 
-  if (
-    !response.ok ||
-    !data ||
-    !data.success
-  ) {
-    throw new Error(
-      data &&
-      !data.success
-        ? data.message
-        : "Login ou senha inválidos.",
-    );
+  if (!response.ok || !data || !data.success) {
+    throw new Error(data && !data.success ? data.message : "Login ou senha inválidos.");
   }
 
   const now = new Date();
-
-  const session: AuthSession = {
-    token: "SERVER_COOKIE",
-    user: data.user,
-    authenticated: true,
-    createdAt: now.toISOString(),
-    expiresAt: data.expiresAt,
-  };
-
-  saveAuthSession(session);
-
   return {
-    session,
+    session: {
+      token: "SERVER_COOKIE",
+      user: data.user,
+      authenticated: true,
+      createdAt: now.toISOString(),
+      expiresAt: data.expiresAt,
+    },
   };
 }
