@@ -154,7 +154,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
       DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
-      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
       BRAVHAS_DEV_AUTH_BYPASS: "false"
       BRAVHAS_ENV: TEST
     steps:
