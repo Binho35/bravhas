@@ -7,7 +7,7 @@ Data da auditoria: 2026-09-03
 - Repositório oficial: `Binho35/bravhas`.
 - Branch principal: `main`.
 - Não há branch `develop` consolidada como destino de PRs; o fluxo atual usa `main`.
-- PR #21 foi o PR válido em andamento encontrado e foi concluído antes deste ciclo.
+- PR #21 foi concluído antes deste ciclo.
 - Merge do PR #21: `3b258156a1471bc53abaf1980094a542476cb2ed`.
 - Quality #169 do HEAD do PR #21 passou com install, dependency audit de produção, Prisma validate/generate, migrations, seed, TypeScript, lint e build.
 - `main` permanece sem branch protection efetiva; isso é blocker de governança para go-live.
@@ -38,6 +38,12 @@ Data da auditoria: 2026-09-03
 | Infraestrutura | BLOQUEADO EXTERNAMENTE | hosting/runtime, PostgreSQL alvo, storage, secrets, domínio/TLS, e-mail, observabilidade, backup/restore/DR. |
 | Produção | BLOQUEADO EXTERNAMENTE | não há evidência suficiente para Production Ready. |
 
+## Dependency audit — evidência do Ciclo 22
+
+O Quality #171 encontrou advisories HIGH de produção. `fast-uri` possui correção compatível e deve ser atualizado pelo lockfile. O outro HIGH observado é `mysql2`, dependência transitiva de `prisma@7.9.1`; o próprio `npm audit` oferece apenas downgrade breaking para Prisma 6.19.3. Não foi aplicado `npm audit fix --force`, downgrade major ou override incompatível.
+
+Até existir correção estável compatível com o stack atual, os advisories `GHSA-3f6p-5ww8-9rcr` e `GHSA-rgwj-5xj2-c3m3` ficam classificados como **MITIGATED / OPEN FOR UPGRADE**, restritos à cadeia transitiva de tooling Prisma, e continuam explicitamente auditados pelo CI. Qualquer HIGH/CRITICAL diferente desses permanece bloqueante.
+
 ## Blockers reais
 
 1. `main` com `protected=false` e required status checks sem enforcement.
@@ -47,6 +53,7 @@ Data da auditoria: 2026-09-03
 5. DR não exercitado.
 6. Infraestrutura alvo e observabilidade não homologadas.
 7. Deploys Vercel recentes falharam por limite de recursos; isso não é tratado como falha do Quality, nem como evidência de produção.
+8. HIGH transitivo `mysql2` via Prisma 7.9.1 permanece MITIGATED até atualização compatível; não classificar como RESOLVED.
 
 ## Regras permanentes
 
@@ -55,3 +62,4 @@ Data da auditoria: 2026-09-03
 - Não declarar produção pronta sem evidência operacional real.
 - Não remover gates para fazer CI passar.
 - Não considerar documentação substituta de teste funcional.
+- Não usar `npm audit fix --force` para mascarar advisory transitivo.
