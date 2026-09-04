@@ -44,8 +44,11 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches Branch[]
-  users    User[]
+  branches          Branch[]
+  users             User[]
+  accessProfiles    AccessProfile[]
+  userEmployeeLinks UserEmployeeLink[]
+  obligations       Obligation[]
 
   suppliers    Supplier[]
   customers    Customer[]
@@ -92,6 +95,7 @@ model User {
   loginId       String   @unique
   name          String
   email         String
+  passwordHash  String?
   role          UserRole
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -101,7 +105,13 @@ model User {
 
   branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
-  sessions UserSession[]
+  sessions      UserSession[]
+  employeeLink  UserEmployeeLink?
+  accessProfile UserAccessProfile?
+
+  responsibleObligations Obligation[] @relation("ObligationResponsible")
+  createdObligations     Obligation[] @relation("ObligationCreatedBy")
+  updatedObligations     Obligation[] @relation("ObligationUpdatedBy")
 
   createdFinancialAccounts FinancialAccount[] @relation("FinancialAccountCreatedBy")
   updatedFinancialAccounts FinancialAccount[] @relation("FinancialAccountUpdatedBy")
@@ -479,6 +489,7 @@ model HrEmployee {
   benefitEnrollments HrBenefitEnrollment[]
   disciplinaryActions HrDisciplinaryAction[]
   tickets            HrTicket[]
+  userLink           UserEmployeeLink?
 
   @@unique([companyId, employeeNumber])
   @@unique([companyId, cpf])
@@ -669,3 +680,97 @@ model HrAuditEvent {
   @@index([entityId])
   @@index([createdAt])
 }
+
+model UserEmployeeLink {
+  userId     String   @id
+  employeeId String   @unique
+  companyId  String
+  createdAt  DateTime @default(now())
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee HrEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  company  Company    @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([companyId])
+}
+
+model AccessProfile {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?
+  master      Boolean  @default(false)
+  system      Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permissions AccessPermission[]
+  users       UserAccessProfile[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model AccessPermission {
+  id         String   @id @default(uuid())
+  profileId  String
+  resource   String
+  canView    Boolean  @default(false)
+  canCreate  Boolean  @default(false)
+  canEdit    Boolean  @default(false)
+  canApprove Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canExport  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile AccessProfile @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([profileId, resource])
+  @@index([profileId])
+}
+
+model UserAccessProfile {
+  userId    String   @id
+  profileId String
+  createdAt DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  profile AccessProfile @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([profileId])
+}
+
+model Obligation {
+  id                String   @id @default(uuid())
+  companyId         String
+  title             String
+  description       String?
+  area              String
+  priority          String
+  status            String   @default("PENDING")
+  responsibleUserId String?
+  responsibleName   String
+  dueDate           DateTime
+  completedAt       DateTime?
+  recurrence        String   @default("NONE")
+  notes             String?
+  createdBy         String
+  updatedBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  company         Company @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  responsibleUser User?   @relation("ObligationResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdByUser   User    @relation("ObligationCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedByUser   User?   @relation("ObligationUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([companyId])
+  @@index([dueDate])
+  @@index([status])
+  @@index([area])
+  @@index([responsibleUserId])
+}
+
