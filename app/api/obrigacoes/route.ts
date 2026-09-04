@@ -2,12 +2,22 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
 const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const STATUSES = new Set(["PENDING", "IN_PROGRESS", "COMPLETED", "OVERDUE", "CANCELED"]);
 const RECURRENCES = new Set(["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
+const CREATE_SAFE_ERRORS = [
+  "Informe o título da obrigação.",
+  "Área da obrigação inválida.",
+  "Prioridade inválida.",
+  "Status inválido.",
+  "Recorrência inválida.",
+  "Informe o responsável.",
+  "Informe uma data de vencimento válida.",
+] as const;
 
 export async function GET() {
   try {
@@ -19,9 +29,9 @@ export async function GET() {
 
     return NextResponse.json({ success: true, obligations });
   } catch (error) {
-    console.error("Erro ao listar obrigações:", error);
+    logServerFailure("Erro ao listar obrigações", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível carregar as obrigações." },
+      { success: false, message: "Não foi possível carregar as obrigações." },
       { status: 401 },
     );
   }
@@ -72,9 +82,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, obligation }, { status: 201 });
   } catch (error) {
-    console.error("Erro ao criar obrigação:", error);
+    logServerFailure("Erro ao criar obrigação", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível criar a obrigação." },
+      { success: false, message: safeErrorMessage(error, CREATE_SAFE_ERRORS, "Não foi possível criar a obrigação.") },
       { status: 400 },
     );
   }
