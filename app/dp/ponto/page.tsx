@@ -11,6 +11,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import { assertEmployeeScope, getEmployeeScopeWhere } from "@/modules/auth/server/rbacPolicy";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 
 function text(formData: FormData, key: string) {
@@ -27,8 +28,7 @@ async function createOccurrence(formData: FormData) {
   const description = text(formData, "description");
   if (!employeeId || !referenceDate || !type || !description) throw new Error("Colaborador, data, tipo e descrição são obrigatórios.");
 
-  const employee = await prisma.hrEmployee.findFirst({ where: { id: employeeId, companyId: actor.companyId }, select: { id: true } });
-  if (!employee) throw new Error("Colaborador não encontrado ou fora do escopo autorizado.");
+  await assertEmployeeScope(employeeId);
 
   const occurrence = await prisma.hrTimeOccurrence.create({
     data: {
@@ -66,6 +66,7 @@ async function reviewOccurrence(formData: FormData) {
   if (!id || !employeeId || !decision) throw new Error("Tratamento de ocorrência inválido.");
   if (!["APPROVED", "REJECTED", "COMPLETED"].includes(decision)) throw new Error("Decisão inválida.");
 
+  await assertEmployeeScope(employeeId);
   const occurrence = await prisma.hrTimeOccurrence.findFirst({ where: { id, employeeId, companyId: actor.companyId }, select: { id: true, status: true } });
   if (!occurrence) throw new Error("Ocorrência não encontrada ou fora do escopo autorizado.");
 
@@ -111,28 +112,29 @@ const statusClass: Record<string, string> = {
 };
 
 export default async function AttendancePage() {
-  const actor = await hrdpPermission.ponto("view");
-  const companyId = actor.companyId;
+  await hrdpPermission.ponto("view");
+  const employeeScope = await getEmployeeScopeWhere();
 
-  const [employees, occurrences, pending, completed] = await Promise.all([
-    prisma.hrEmployee.findMany({
-      where: { companyId, active: true, status: { in: ["ACTIVE", "ON_LEAVE"] } },
-      orderBy: { fullName: "asc" },
-      select: { id: true, fullName: true, employeeNumber: true },
-    }),
+  const employees = await prisma.hrEmployee.findMany({
+    where: { ...employeeScope, active: true, status: { in: ["ACTIVE", "ON_LEAVE"] } },
+    orderBy: { fullName: "asc" },
+    select: { id: true, fullName: true, employeeNumber: true },
+  });
+  const visibleEmployeeIds = employees.map((item) => item.id);
+
+  const [occurrences, pending, completed] = visibleEmployeeIds.length > 0 ? await Promise.all([
     prisma.hrTimeOccurrence.findMany({
-      where: { companyId },
+      where: { companyId: employeeScope.companyId, employeeId: { in: visibleEmployeeIds } },
       orderBy: [{ referenceDate: "desc" }, { createdAt: "desc" }],
       take: 80,
       include: { employee: { select: { id: true, fullName: true, employeeNumber: true } } },
     }),
-    prisma.hrTimeOccurrence.count({ where: { companyId, status: "PENDING" } }),
-    prisma.hrTimeOccurrence.count({ where: { companyId, status: { in: ["APPROVED", "COMPLETED"] } } }),
-  ]);
+    prisma.hrTimeOccurrence.count({ where: { companyId: employeeScope.companyId, employeeId: { in: visibleEmployeeIds }, status: "PENDING" } }),
+    prisma.hrTimeOccurrence.count({ where: { companyId: employeeScope.companyId, employeeId: { in: visibleEmployeeIds }, status: { in: ["APPROVED", "COMPLETED"] } } }),
+  ]) : [[], 0, 0];
 
   const today = new Date();
   const todayCount = occurrences.filter((item) => item.referenceDate.toDateString() === today.toDateString()).length;
-
   const metrics = [
     { label: "Ocorrências hoje", value: todayCount, icon: AlertTriangle },
     { label: "Pendentes de tratamento", value: pending, icon: Clock3 },
@@ -148,23 +150,23 @@ export default async function AttendancePage() {
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">Competência aberta · trilha de tratamento ativa</div>
         </div>
 
-        <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-slate-500">{label}</p><strong className="mt-2 block text-2xl text-[#0b2947]">{value}</strong></div><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><Icon className="h-[18px] w-[18px]" /></div></div></article>)}</section>
+        <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores de ponto">{metrics.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-slate-500">{label}</p><strong className="mt-2 block text-2xl text-[#0b2947]">{value}</strong></div><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]" aria-hidden="true"><Icon className="h-[18px] w-[18px]" /></div></div></article>)}</section>
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[430px_1fr]">
-          <form action={createOccurrence} className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><Plus className="h-5 w-5" /></div><div><h2 className="font-bold text-[#0b2947]">Nova ocorrência</h2><p className="text-xs text-slate-500">Registro inicial para tratamento do gestor e conferência do RH.</p></div></div>
+          <form action={createOccurrence} className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)] sm:p-6">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]" aria-hidden="true"><Plus className="h-5 w-5" /></div><div><h2 className="font-bold text-[#0b2947]">Nova ocorrência</h2><p className="text-xs text-slate-500">Registro inicial para tratamento do gestor e conferência do RH.</p></div></div>
             <div className="mt-5 space-y-4">
-              <label className="block"><span className="text-xs font-semibold text-slate-600">Colaborador *</span><select name="employeeId" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"><option value="">Selecione</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.employeeNumber ? ` · ${item.employeeNumber}` : ""}</option>)}</select></label>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"><label className="block"><span className="text-xs font-semibold text-slate-600">Data *</span><input name="referenceDate" type="date" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm" /></label><label className="block"><span className="text-xs font-semibold text-slate-600">Tipo *</span><select name="type" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"><option value="">Selecione</option><option value="FALTA">Falta</option><option value="ATRASO">Atraso</option><option value="MARCAÇÃO INCOMPLETA">Marcação incompleta</option><option value="SAÍDA ANTECIPADA">Saída antecipada</option><option value="AJUSTE MANUAL">Ajuste manual</option><option value="OUTRA">Outra</option></select></label></div>
-              <label className="block"><span className="text-xs font-semibold text-slate-600">Descrição *</span><textarea name="description" required rows={4} placeholder="Descreva objetivamente a ocorrência." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm" /></label>
-              <label className="block"><span className="text-xs font-semibold text-slate-600">Justificativa do colaborador</span><textarea name="employeeNote" rows={3} placeholder="Registre a justificativa apresentada pelo colaborador." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm" /></label>
-              <button type="submit" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-4 text-sm font-semibold text-white"><ClipboardCheck className="h-4 w-4" />Registrar ocorrência</button>
+              <label className="block"><span className="text-xs font-semibold text-slate-600">Colaborador *</span><select name="employeeId" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10"><option value="">Selecione</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.employeeNumber ? ` · ${item.employeeNumber}` : ""}</option>)}</select></label>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"><label className="block"><span className="text-xs font-semibold text-slate-600">Data *</span><input name="referenceDate" type="date" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label><label className="block"><span className="text-xs font-semibold text-slate-600">Tipo *</span><select name="type" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10"><option value="">Selecione</option><option value="FALTA">Falta</option><option value="ATRASO">Atraso</option><option value="MARCAÇÃO INCOMPLETA">Marcação incompleta</option><option value="SAÍDA ANTECIPADA">Saída antecipada</option><option value="AJUSTE MANUAL">Ajuste manual</option><option value="OUTRA">Outra</option></select></label></div>
+              <label className="block"><span className="text-xs font-semibold text-slate-600">Descrição *</span><textarea name="description" required rows={4} placeholder="Descreva objetivamente a ocorrência." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label>
+              <label className="block"><span className="text-xs font-semibold text-slate-600">Justificativa do colaborador</span><textarea name="employeeNote" rows={3} placeholder="Registre a justificativa apresentada pelo colaborador." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label>
+              <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/40"><ClipboardCheck className="h-4 w-4" aria-hidden="true" />Registrar ocorrência</button>
             </div>
           </form>
 
           <article className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">Tratamento diário</p><h2 className="mt-1 text-lg font-bold text-[#0b2947]">Ocorrências registradas</h2></div><CalendarDays className="h-5 w-5 text-[#154b7a]" /></div>
-            {occurrences.length === 0 ? <div className="px-6 py-14 text-center"><ClipboardCheck className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-4 font-semibold text-slate-700">Nenhuma ocorrência registrada</p><p className="mt-2 text-sm text-slate-500">As ocorrências de ponto aparecerão aqui para tratamento.</p></div> : <div className="divide-y divide-slate-100">{occurrences.map((item) => <div key={item.id} className="p-5"><div className="grid gap-3 md:grid-cols-[110px_minmax(180px,1fr)_150px_minmax(200px,1.2fr)] md:items-start"><span className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.referenceDate)}</span><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{requestLabel[item.status] ?? item.status}</span><div><p className="text-sm font-semibold text-slate-700">{item.type}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>{item.employeeNote ? <p className="mt-2 text-xs text-slate-600"><strong>Justificativa:</strong> {item.employeeNote}</p> : null}</div></div>{item.status === "PENDING" ? <form action={reviewOccurrence} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[1fr_120px_120px]"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><input name="managerNote" placeholder="Parecer do gestor/RH" className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs" /><button name="decision" value="APPROVED" className="h-9 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white">Aprovar</button><button name="decision" value="REJECTED" className="h-9 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-400"><span>Tratado por: {item.reviewedBy ?? "—"}</span><span>Em: {item.reviewedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.reviewedAt) : "—"}</span>{item.managerNote ? <span>Parecer: {item.managerNote}</span> : null}</div>}</div>)}</div>}
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-5 sm:px-6"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">Tratamento diário</p><h2 className="mt-1 text-lg font-bold text-[#0b2947]">Ocorrências registradas</h2></div><CalendarDays className="h-5 w-5 text-[#154b7a]" aria-hidden="true" /></div>
+            {occurrences.length === 0 ? <div className="px-6 py-14 text-center"><ClipboardCheck className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true"/><p className="mt-4 font-semibold text-slate-700">Nenhuma ocorrência registrada</p><p className="mt-2 text-sm text-slate-500">As ocorrências de ponto da equipe autorizada aparecerão aqui para tratamento.</p></div> : <div className="divide-y divide-slate-100">{occurrences.map((item) => <div key={item.id} className="p-4 sm:p-5"><div className="grid gap-3 md:grid-cols-[110px_minmax(180px,1fr)_150px_minmax(200px,1.2fr)] md:items-start"><span className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.referenceDate)}</span><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{requestLabel[item.status] ?? item.status}</span><div><p className="text-sm font-semibold text-slate-700">{item.type}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>{item.employeeNote ? <p className="mt-2 text-xs text-slate-600"><strong>Justificativa:</strong> {item.employeeNote}</p> : null}</div></div>{item.status === "PENDING" ? <form action={reviewOccurrence} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[1fr_120px_120px]"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><label className="sr-only" htmlFor={`manager-note-${item.id}`}>Parecer do gestor ou RH</label><input id={`manager-note-${item.id}`} name="managerNote" placeholder="Parecer do gestor/RH" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /><button type="submit" name="decision" value="APPROVED" className="min-h-10 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40">Aprovar</button><button type="submit" name="decision" value="REJECTED" className="min-h-10 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600/40">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-400"><span>Tratado por: {item.reviewedBy ?? "—"}</span><span>Em: {item.reviewedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.reviewedAt) : "—"}</span>{item.managerNote ? <span>Parecer: {item.managerNote}</span> : null}</div>}</div>)}</div>}
           </article>
         </section>
       </div>
