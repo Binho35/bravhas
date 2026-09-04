@@ -68,12 +68,16 @@ jobs:
       - name: Security regression
         run: |
           ! grep -R "BRAVHAS_DEV_AUTH_BYPASS.*true" app modules lib --include='*.ts' --include='*.tsx'
-          ! grep -R "localStorage" modules/financial modules/obligations app --include='*.ts' --include='*.tsx'
+          ! grep -R "localStorage" modules/auth modules/financial modules/obligations app --include='*.ts' --include='*.tsx'
+          ! grep -R "npx --yes tsx" package.json .github scripts prisma --include='*.json' --include='*.yml' --include='*.yaml' --include='*.ts'
           grep -q 'createHash("sha256")' modules/auth/server/session.ts
           grep -q 'httpOnly: true' modules/auth/server/session.ts
           grep -q 'sameSite: "lax"' modules/auth/server/session.ts
           grep -q 'secure: process.env.NODE_ENV === "production"' modules/auth/server/session.ts
+          grep -q 'getServerAuthSession' app/api/auth/session/route.ts
+          grep -q 'SESSION_COOKIE_NAME' proxy.ts
           grep -q 'Seed recusado em ambiente de produção' prisma/seed.ts
+          grep -q 'E2E seed recusado fora de TEST/HOMOLOGATION' scripts/e2e-seed.ts
 
       - name: Apply migrations
         run: npx prisma migrate deploy
@@ -129,3 +133,57 @@ jobs:
         run: npm run seed
       - name: Migration status
         run: npx prisma migrate status
+
+  browser-security-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bravhas_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d bravhas_e2e"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_e2e
+      BRAVHAS_DEV_AUTH_BYPASS: "false"
+      BRAVHAS_ENV: TEST
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Synthetic E2E fixtures
+        run: npm run e2e:seed
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Authenticated E2E
+        run: npm run test:e2e:auth
+
+      - name: Cross-tenant and RBAC negative E2E
+        run: npm run test:e2e:security
