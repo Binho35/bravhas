@@ -9,6 +9,10 @@ if (!connectionString) {
   throw new Error("DATABASE_DIRECT_URL ou DATABASE_URL precisa estar configurada.");
 }
 
+if (process.env.NODE_ENV === "production" || process.env.BRAVHAS_ENV === "PRODUCTION") {
+  throw new Error("Seed recusado em ambiente de produção.");
+}
+
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 

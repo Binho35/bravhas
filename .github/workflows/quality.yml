@@ -12,6 +12,7 @@ env:
   DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/bravhas
   SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bravhas_shadow
   BRAVHAS_DEV_AUTH_BYPASS: "false"
+  BRAVHAS_ENV: TEST
 
 jobs:
   validate:
@@ -45,13 +46,34 @@ jobs:
         run: npm ci
 
       - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/dependency-audit.mjs
 
       - name: Prisma validate
         run: npx prisma validate
 
       - name: Prisma generate
         run: npx prisma generate
+
+      - name: Migration safety
+        run: |
+          if grep -R 'db push --accept-data[-]loss' --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' . | grep -q .; then
+            echo "Forbidden destructive Prisma db push found"
+            exit 1
+          fi
+          if grep -R 'migrate[[:space:]]reset' --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' . | grep -q .; then
+            echo "Forbidden destructive Prisma migration command found"
+            exit 1
+          fi
+
+      - name: Security regression
+        run: |
+          ! grep -R "BRAVHAS_DEV_AUTH_BYPASS.*true" app modules lib --include='*.ts' --include='*.tsx'
+          ! grep -R "localStorage" modules/financial modules/obligations app --include='*.ts' --include='*.tsx'
+          grep -q 'createHash("sha256")' modules/auth/server/session.ts
+          grep -q 'httpOnly: true' modules/auth/server/session.ts
+          grep -q 'sameSite: "lax"' modules/auth/server/session.ts
+          grep -q 'secure: process.env.NODE_ENV === "production"' modules/auth/server/session.ts
+          grep -q 'Seed recusado em ambiente de produção' prisma/seed.ts
 
       - name: Apply migrations
         run: npx prisma migrate deploy
@@ -67,3 +89,43 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  fresh-database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bravhas_fresh
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d bravhas_fresh"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/bravhas_fresh
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5433/bravhas_fresh
+      BRAVHAS_DEV_AUTH_BYPASS: "false"
+      BRAVHAS_ENV: TEST
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate
+      - name: Fresh migration baseline
+        run: npx prisma migrate deploy
+      - name: Fresh seed
+        run: npm run seed
+      - name: Migration status
+        run: npx prisma migrate status
