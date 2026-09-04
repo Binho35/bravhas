@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 import { expect, test, type Page } from "@playwright/test";
-
-import { prisma } from "../../lib/prisma";
 
 const alpha = {
   login: "e2eAlphaOwner",
@@ -19,6 +18,18 @@ async function login(page: Page) {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function mutateServerSession(action: "revoke" | "expire", token: string) {
+  execFileSync(
+    process.execPath,
+    ["node_modules/tsx/dist/cli.mjs", "scripts/e2e-session-control.ts", action, hashToken(token)],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: "pipe",
+    },
+  );
 }
 
 test.describe("authenticated session lifecycle", () => {
@@ -104,10 +115,7 @@ test.describe("authenticated session lifecycle", () => {
     const cookie = (await context.cookies()).find((item) => item.name === "bravhas_session");
     expect(cookie?.value).toBeTruthy();
 
-    await prisma.userSession.update({
-      where: { tokenHash: hashToken(cookie!.value) },
-      data: { revokedAt: new Date() },
-    });
+    mutateServerSession("revoke", cookie!.value);
 
     await page.goto("/");
     await expect(page).toHaveURL(/\/login/);
@@ -118,16 +126,9 @@ test.describe("authenticated session lifecycle", () => {
     const cookie = (await context.cookies()).find((item) => item.name === "bravhas_session");
     expect(cookie?.value).toBeTruthy();
 
-    await prisma.userSession.update({
-      where: { tokenHash: hashToken(cookie!.value) },
-      data: { expiresAt: new Date(Date.now() - 60_000) },
-    });
+    mutateServerSession("expire", cookie!.value);
 
     await page.goto("/");
     await expect(page).toHaveURL(/\/login/);
   });
-});
-
-test.afterAll(async () => {
-  await prisma.$disconnect();
 });
