@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
 
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { RegisterReceiptUseCase } from "@/modules/financial/application/use-cases/RegisterReceiptUseCase";
 import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
 import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
+
+const SAFE_ERRORS = [
+  "A data do recebimento é inválida.",
+  "A conta financeira é obrigatória.",
+  "O responsável pelo recebimento é obrigatório.",
+  "O valor do recebimento deve ser maior que zero.",
+  "Conta financeira não encontrada.",
+  "Este lançamento não é uma conta a receber.",
+  "Esta conta não permite um novo recebimento.",
+  "Esta conta não possui saldo pendente.",
+  "O valor do recebimento é maior que o saldo restante.",
+] as const;
 
 export async function POST(request: Request) {
   try {
@@ -40,11 +53,11 @@ export async function POST(request: Request) {
       remaining: result.remaining,
     });
   } catch (error) {
-    console.error("Erro ao registrar recebimento:", error);
+    logServerFailure("Erro ao registrar recebimento", error);
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Não foi possível registrar o recebimento.",
+        message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o recebimento."),
       },
       { status: 400 },
     );

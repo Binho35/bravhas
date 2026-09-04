@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { CancelFinancialAccountUseCase } from "@/modules/financial/application/use-cases/CancelFinancialAccountUseCase";
 import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
 import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
+
+const SAFE_ERRORS = [
+  "A data do cancelamento é inválida.",
+  "A conta financeira é obrigatória.",
+  "O responsável pelo cancelamento é obrigatório.",
+  "Conta financeira não encontrada.",
+  "Esta conta já está cancelada.",
+  "Uma conta já liquidada não pode ser cancelada.",
+] as const;
 
 export async function POST(request: Request) {
   try {
@@ -37,11 +47,11 @@ export async function POST(request: Request) {
       canceledAt: result.canceledAt,
     });
   } catch (error) {
-    console.error("Erro ao cancelar conta financeira:", error);
+    logServerFailure("Erro ao cancelar conta financeira", error);
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Não foi possível cancelar a conta financeira.",
+        message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível cancelar a conta financeira."),
       },
       { status: 400 },
     );

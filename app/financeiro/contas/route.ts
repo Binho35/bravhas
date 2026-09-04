@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { CreateFinancialAccountUseCase } from "@/modules/financial/application/use-cases/CreateFinancialAccountUseCase";
 import { ListFinancialAccountsUseCase } from "@/modules/financial/application/use-cases/ListFinancialAccountsUseCase";
 import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
@@ -8,6 +9,28 @@ import { assertFinancialReferences, requireFinancialActor } from "@/modules/fina
 const repository = new PrismaFinancialAccountRepository();
 const createFinancialAccountUseCase = new CreateFinancialAccountUseCase(repository);
 const listFinancialAccountsUseCase = new ListFinancialAccountsUseCase(repository);
+const REFERENCE_SAFE_ERRORS = [
+  "Unidade inválido(a) para a empresa autenticada.",
+  "Centro de custo inválido(a) para a empresa autenticada.",
+  "Categoria inválido(a) para a empresa autenticada.",
+  "Fornecedor inválido(a) para a empresa autenticada.",
+  "Cliente inválido(a) para a empresa autenticada.",
+  "Conta bancária inválido(a) para a empresa autenticada.",
+] as const;
+const LIST_SAFE_ERRORS = ["Data inicial inválida.", "Data final inválida.", ...REFERENCE_SAFE_ERRORS] as const;
+const CREATE_SAFE_ERRORS = [
+  "A filial é obrigatória.",
+  "A descrição da conta financeira é obrigatória.",
+  "A data de emissão é inválida.",
+  "A data de vencimento é inválida.",
+  "O tipo da conta financeira é inválido.",
+  "O valor da conta financeira deve ser maior que zero.",
+  "O desconto não pode ser negativo.",
+  "Os juros não podem ser negativos.",
+  "A multa não pode ser negativa.",
+  "A data de vencimento não pode ser anterior à data de emissão.",
+  ...REFERENCE_SAFE_ERRORS,
+] as const;
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,9 +82,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, ...accounts });
   } catch (error) {
-    console.error("Erro ao listar contas financeiras:", error);
+    logServerFailure("Erro ao listar contas financeiras na rota legada", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível listar as contas financeiras." },
+      { success: false, message: safeErrorMessage(error, LIST_SAFE_ERRORS, "Não foi possível listar as contas financeiras.") },
       { status: 400 },
     );
   }
@@ -116,9 +139,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, account: account.data }, { status: 201 });
   } catch (error) {
-    console.error("Erro ao criar conta financeira:", error);
+    logServerFailure("Erro ao criar conta financeira na rota legada", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível criar a conta financeira." },
+      { success: false, message: safeErrorMessage(error, CREATE_SAFE_ERRORS, "Não foi possível criar a conta financeira.") },
       { status: 400 },
     );
   }

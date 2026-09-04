@@ -33,6 +33,20 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
+  test("security headers are emitted on application responses", async ({ page }) => {
+    const response = await page.request.get("/login");
+    expect(response.ok()).toBe(true);
+    const headers = response.headers();
+    expect(headers["x-content-type-options"]).toBe("nosniff");
+    expect(headers["x-frame-options"]).toBe("DENY");
+    expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(headers["permissions-policy"]).toContain("camera=()");
+    expect(headers["permissions-policy"]).toContain("microphone=()");
+    expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(headers["cross-origin-resource-policy"]).toBe("same-origin");
+    expect(headers["x-powered-by"]).toBeUndefined();
+  });
+
   test("direct protected URL without cookie is rejected before client auth", async ({ page }) => {
     await page.goto("/financeiro");
     await expect(page).toHaveURL(/\/login\?next=%2Ffinanceiro$/);

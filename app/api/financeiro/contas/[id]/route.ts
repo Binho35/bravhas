@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { GetFinancialAccountUseCase } from "@/modules/financial/application/use-cases/GetFinancialAccountUseCase";
 import { UpdateFinancialAccountUseCase } from "@/modules/financial/application/use-cases/UpdateFinancialAccountUseCase";
 import { DeleteFinancialAccountUseCase } from "@/modules/financial/application/use-cases/DeleteFinancialAccountUseCase";
@@ -14,6 +15,12 @@ interface RouteContext {
 }
 
 const repository = new PrismaFinancialAccountRepository();
+const UPDATE_SAFE_ERRORS = [
+  "A descrição da conta financeira é obrigatória.",
+  "A data de emissão é inválida.",
+  "A data de vencimento é inválida.",
+  "O valor da conta financeira deve ser maior que zero.",
+] as const;
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
@@ -27,9 +34,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ success: true, account: account.data });
   } catch (error) {
-    console.error("Erro ao consultar conta financeira:", error);
+    logServerFailure("Erro ao consultar conta financeira", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível consultar a conta financeira." },
+      { success: false, message: "Não foi possível consultar a conta financeira." },
       { status: 400 },
     );
   }
@@ -98,9 +105,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const account = await new UpdateFinancialAccountUseCase(repository).execute({ account: updatedAccount });
     return NextResponse.json({ success: true, account: account.data });
   } catch (error) {
-    console.error("Erro ao atualizar conta financeira:", error);
+    logServerFailure("Erro ao atualizar conta financeira", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível atualizar a conta financeira." },
+      { success: false, message: safeErrorMessage(error, UPDATE_SAFE_ERRORS, "Não foi possível atualizar a conta financeira.") },
       { status: 400 },
     );
   }
@@ -113,9 +120,9 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     await new DeleteFinancialAccountUseCase(repository).execute({ id: id.trim() });
     return NextResponse.json({ success: true, message: "Conta financeira excluída com sucesso." });
   } catch (error) {
-    console.error("Erro ao excluir conta financeira:", error);
+    logServerFailure("Erro ao excluir conta financeira", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível excluir a conta financeira." },
+      { success: false, message: "Não foi possível excluir a conta financeira." },
       { status: 400 },
     );
   }

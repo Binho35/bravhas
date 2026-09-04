@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
 
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { ReversePaymentUseCase } from "@/modules/financial/application/use-cases/ReversePaymentUseCase";
 import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
 import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
+
+const SAFE_ERRORS = [
+  "A data do estorno é inválida.",
+  "A conta financeira é obrigatória.",
+  "O responsável pelo estorno é obrigatório.",
+  "Conta financeira não encontrada.",
+  "Este lançamento não é uma conta a pagar.",
+  "Não é possível estornar uma conta cancelada.",
+  "Esta conta não possui valor liquidado para estorno.",
+  "O valor do estorno deve ser maior que zero.",
+  "O valor do estorno é maior que o valor já liquidado.",
+] as const;
 
 export async function POST(request: Request) {
   try {
@@ -45,11 +58,11 @@ export async function POST(request: Request) {
       remainingPaidAmount: result.remainingPaidAmount,
     });
   } catch (error) {
-    console.error("Erro ao registrar estorno:", error);
+    logServerFailure("Erro ao registrar estorno", error);
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Não foi possível registrar o estorno.",
+        message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o estorno."),
       },
       { status: 400 },
     );

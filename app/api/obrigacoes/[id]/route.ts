@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
 const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const STATUSES = new Set(["PENDING", "IN_PROGRESS", "COMPLETED", "OVERDUE", "CANCELED"]);
 const RECURRENCES = new Set(["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
+const UPDATE_SAFE_ERRORS = [
+  "Informe o título da obrigação.",
+  "Área da obrigação inválida.",
+  "Prioridade inválida.",
+  "Status inválido.",
+  "Recorrência inválida.",
+  "Informe o responsável.",
+  "Informe uma data de vencimento válida.",
+] as const;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,8 +34,9 @@ export async function GET(_request: Request, context: RouteContext) {
 
     return NextResponse.json({ success: true, obligation });
   } catch (error) {
+    logServerFailure("Erro ao consultar obrigação", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível consultar a obrigação." },
+      { success: false, message: "Não foi possível consultar a obrigação." },
       { status: 401 },
     );
   }
@@ -84,11 +95,12 @@ export async function PUT(request: Request, context: RouteContext) {
       return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
     }
 
-    const obligation = await prisma.obligation.findUnique({ where: { id } });
+    const obligation = await prisma.obligation.findFirst({ where: { id, companyId: actor.companyId } });
     return NextResponse.json({ success: true, obligation });
   } catch (error) {
+    logServerFailure("Erro ao atualizar obrigação", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível atualizar a obrigação." },
+      { success: false, message: safeErrorMessage(error, UPDATE_SAFE_ERRORS, "Não foi possível atualizar a obrigação.") },
       { status: 400 },
     );
   }
