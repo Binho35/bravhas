@@ -49,6 +49,24 @@ test.describe("mobile product smoke", () => {
     await expectNoSevereHorizontalOverflow(page);
   });
 
+  test("Pessoas shell exposes RH and DP navigation on mobile", async ({ page }) => {
+    await login(page);
+    await page.goto("/pessoas");
+    await expect(page.getByRole("heading", { name: "RH e DP em uma única visão operacional.", exact: true })).toBeVisible();
+    await expectNoSevereHorizontalOverflow(page);
+
+    await page.getByRole("button", { name: "Abrir navegação de Pessoas" }).click();
+    const drawer = page.getByRole("dialog", { name: "Navegação de RH e Departamento Pessoal" });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "RH", exact: true })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "DP", exact: true })).toBeVisible();
+
+    await drawer.getByRole("link", { name: "RH", exact: true }).click();
+    await expect(page).toHaveURL(/\/rh$/);
+    await expect(page.getByRole("heading", { name: "RH", exact: true })).toBeVisible();
+    await expectNoSevereHorizontalOverflow(page);
+  });
+
   test("mobile drawer closes with Escape and logout completes safely", async ({ page }) => {
     await login(page);
     const menuButton = page.getByRole("button", { name: "Abrir menu de navegação" });
