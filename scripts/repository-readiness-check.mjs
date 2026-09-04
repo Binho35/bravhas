@@ -72,6 +72,19 @@ for (const absolute of authFiles) {
   if (/\blocalStorage\b/.test(content)) failures.push(`${path.relative(root, absolute)}: localStorage não pode ser fonte de auth`);
 }
 
+const apiHandlerFiles = await collectFiles("app/api");
+apiHandlerFiles.push(path.join(root, "app/financeiro/contas/route.ts"));
+for (const absolute of apiHandlerFiles) {
+  const content = await readFile(absolute, "utf8");
+  const relative = path.relative(root, absolute);
+  if (/message\s*:\s*error\s+instanceof\s+Error\s*\?\s*error\.message/.test(content)) {
+    failures.push(`${relative}: resposta expõe error.message sem allowlist`);
+  }
+  if (/console\.error\([^;]*,\s*error\s*\)/s.test(content)) {
+    failures.push(`${relative}: log server-side despeja objeto de erro completo`);
+  }
+}
+
 const operationalFiles = [
   ...(await collectFiles("scripts")),
   ...(await collectFiles("prisma")),
