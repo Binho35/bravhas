@@ -1,0 +1,45 @@
+name: Schema Align Helper
+
+on:
+  push:
+    branches:
+      - feature/schema-integrity-api-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/schema-integrity-api-hardening
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Align schema
+        run: python3 scripts/align-prisma-schema.py
+
+      - name: Validate schema
+        run: npx prisma validate
+
+      - name: Commit schema
+        run: |
+          if git diff --quiet -- prisma/schema.prisma; then
+            echo "No schema change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma
+          git commit -m "refactor: align Prisma schema with existing migrations"
+          git push origin HEAD:feature/schema-integrity-api-hardening
