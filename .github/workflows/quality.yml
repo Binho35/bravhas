@@ -80,6 +80,9 @@ jobs:
           grep -q 'Seed recusado em ambiente de produção' prisma/seed.ts
           grep -q 'E2E seed recusado fora de TEST/HOMOLOGATION' scripts/e2e-seed.ts
 
+      - name: Repository readiness regression
+        run: node scripts/repository-readiness-check.mjs
+
       - name: Apply migrations
         run: npx prisma migrate deploy
 
