@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure } from "@/lib/serverErrors";
 import { requireFinancialActor } from "@/modules/financial/server/financialAuth";
 
 export async function GET() {
@@ -59,11 +60,11 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Erro ao carregar fluxo de caixa agregado:", error);
+    logServerFailure("Erro ao carregar fluxo de caixa agregado", error);
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Não foi possível carregar o fluxo de caixa.",
+        message: "Não foi possível carregar o fluxo de caixa.",
       },
       { status: 400 },
     );
