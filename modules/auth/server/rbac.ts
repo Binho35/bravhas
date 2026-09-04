@@ -25,8 +25,7 @@ export const RBAC_RESOURCES = [
 export type RbacResource = (typeof RBAC_RESOURCES)[number];
 export type RbacAction = "view" | "create" | "edit" | "approve" | "delete" | "export";
 
-type PermissionRow = {
-  master: boolean;
+type PermissionFlags = {
   canView: boolean;
   canCreate: boolean;
   canEdit: boolean;
@@ -35,7 +34,7 @@ type PermissionRow = {
   canExport: boolean;
 };
 
-const actionColumn: Record<RbacAction, keyof PermissionRow> = {
+const actionColumn: Record<RbacAction, keyof PermissionFlags> = {
   view: "canView",
   create: "canCreate",
   edit: "canEdit",
@@ -52,27 +51,29 @@ export async function requirePermission(resource: RbacResource, action: RbacActi
 
   if (user.role === "OWNER" || user.role === "ADMIN") return user;
 
-  const rows = await prisma.$queryRaw<PermissionRow[]>`
-    SELECT
-      p."master",
-      a."canView",
-      a."canCreate",
-      a."canEdit",
-      a."canApprove",
-      a."canDelete",
-      a."canExport"
-    FROM "UserAccessProfile" u
-    JOIN "AccessProfile" p ON p."id" = u."profileId"
-    LEFT JOIN "AccessPermission" a
-      ON a."profileId" = p."id" AND a."resource" = ${resource}
-    WHERE u."userId" = ${user.id}
-      AND p."companyId" = ${user.companyId}
-      AND p."active" = true
-    LIMIT 1
-  `;
+  const assignment = await prisma.userAccessProfile.findUnique({
+    where: { userId: user.id },
+    include: {
+      profile: {
+        include: {
+          permissions: {
+            where: { resource },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
 
-  const permission = rows[0];
-  if (!permission || (!permission.master && !permission[actionColumn[action]])) {
+  const profile = assignment?.profile;
+  if (!profile || profile.companyId !== user.companyId || !profile.active) {
+    throw new Error("Usuário sem permissão para esta operação.");
+  }
+
+  if (profile.master) return user;
+
+  const permission = profile.permissions[0];
+  if (!permission || !permission[actionColumn[action]]) {
     throw new Error("Usuário sem permissão para esta operação.");
   }
 
@@ -92,15 +93,23 @@ export async function ensureDefaultAccessProfiles(companyId: string) {
   ];
 
   for (const profile of profiles) {
-    const id = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "AccessProfile" (
-        "id", "companyId", "name", "description", "master", "system", "active", "updatedAt"
-      )
-      VALUES (
-        ${id}, ${companyId}, ${profile.name}, ${profile.description}, ${profile.master}, true, true, NOW()
-      )
-      ON CONFLICT ("companyId", "name") DO NOTHING
-    `;
+    await prisma.accessProfile.upsert({
+      where: {
+        companyId_name: {
+          companyId,
+          name: profile.name,
+        },
+      },
+      update: {},
+      create: {
+        id: randomUUID(),
+        companyId,
+        name: profile.name,
+        description: profile.description,
+        master: profile.master,
+        system: true,
+        active: true,
+      },
+    });
   }
 }
