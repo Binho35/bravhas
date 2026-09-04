@@ -7,12 +7,14 @@ const fixture = {
     hrLogin: "e2eAlphaHr",
     managerLogin: "e2eAlphaManager",
     ownerId: "E2E-USER-ALPHA-OWNER",
+    branchId: "E2E-BRANCH-ALPHA",
     password: "E2E-Alpha-2026!Secure",
     accountId: "E2E-ACCOUNT-ALPHA",
   },
   beta: {
     ownerLogin: "e2eBetaOwner",
     ownerId: "E2E-USER-BETA-OWNER",
+    branchId: "E2E-BRANCH-BETA",
     password: "E2E-Beta-2026!Secure",
     accountId: "E2E-ACCOUNT-BETA",
   },
@@ -50,6 +52,34 @@ test.describe("tenant isolation and negative RBAC", () => {
     const raw = await response.text();
     expect(raw).toContain(fixture.alpha.accountId);
     expect(raw).not.toContain(fixture.beta.accountId);
+  });
+
+  test("legacy financial route ignores a spoofed company filter", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+    const response = await page.request.get("/financeiro/contas?companyId=E2E-COMPANY-BETA");
+    expect(response.ok()).toBe(true);
+    const raw = await response.text();
+    expect(raw).toContain(fixture.alpha.accountId);
+    expect(raw).not.toContain(fixture.beta.accountId);
+  });
+
+  test("legacy financial route rejects a foreign branch and client actor spoofing", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+    const response = await page.request.post("/financeiro/contas", {
+      data: {
+        companyId: "E2E-COMPANY-BETA",
+        branchId: fixture.beta.branchId,
+        createdBy: fixture.beta.ownerId,
+        description: "E2E legacy tenant spoofing probe",
+        type: "PAYABLE",
+        amount: 20,
+        issueDate: "2026-10-01T12:00:00.000Z",
+        dueDate: "2026-10-20T12:00:00.000Z",
+      },
+    });
+    expect(response.ok()).toBe(false);
+    const raw = await response.text();
+    expect(raw).toContain("empresa autenticada");
   });
 
   test("beta actor can read beta resource while alpha resource stays foreign", async ({ page }) => {
@@ -123,5 +153,43 @@ test.describe("tenant isolation and negative RBAC", () => {
     expect(body.obligation.companyId).toBe("E2E-COMPANY-ALPHA");
     expect(body.obligation.responsibleUserId).toBe(fixture.alpha.ownerId);
     expect(body.obligation.createdBy).toBe(fixture.alpha.ownerId);
+  });
+
+  test("beta tenant cannot read or update a valid alpha obligation id", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+
+    const created = await page.request.post("/api/obrigacoes", {
+      data: {
+        title: "E2E Alpha cross-tenant obligation",
+        area: "ADMINISTRATIVE",
+        priority: "MEDIUM",
+        status: "PENDING",
+        recurrence: "NONE",
+        dueDate: "2026-10-12T12:00:00.000Z",
+        responsibleName: "E2E Alpha Owner",
+      },
+    });
+    expect(created.ok()).toBe(true);
+    const createdBody = await created.json();
+    const alphaObligationId = String(createdBody.obligation.id);
+
+    const logoutResponse = await page.request.post("/api/auth/logout");
+    expect(logoutResponse.ok()).toBe(true);
+    await login(page, fixture.beta.ownerLogin, fixture.beta.password);
+
+    const foreignRead = await page.request.get(`/api/obrigacoes/${alphaObligationId}`);
+    expect(foreignRead.status()).toBe(404);
+    const readBody = await foreignRead.json();
+    expect(readBody.message).toBe("Obrigação não encontrada.");
+
+    const foreignUpdate = await page.request.put(`/api/obrigacoes/${alphaObligationId}`, {
+      data: {
+        title: "E2E Beta attempted overwrite",
+        status: "COMPLETED",
+      },
+    });
+    expect(foreignUpdate.status()).toBe(404);
+    const updateBody = await foreignUpdate.json();
+    expect(updateBody.message).toBe("Obrigação não encontrada.");
   });
 });

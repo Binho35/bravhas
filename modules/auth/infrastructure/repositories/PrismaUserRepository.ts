@@ -2,10 +2,6 @@ import { prisma } from "@/lib/prisma";
 
 import type { AuthUser } from "../../types/AuthUser";
 
-type CredentialRow = {
-  passwordHash: string | null;
-};
-
 export class PrismaUserRepository {
   async findById(id: string): Promise<AuthUser | null> {
     const user = await prisma.user.findUnique({ where: { id } });
@@ -26,14 +22,12 @@ export class PrismaUserRepository {
   }
 
   async findPasswordHashById(id: string): Promise<string | null> {
-    const rows = await prisma.$queryRaw<CredentialRow[]>`
-      SELECT "passwordHash"
-      FROM "User"
-      WHERE "id" = ${id}
-      LIMIT 1
-    `;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { passwordHash: true },
+    });
 
-    return rows[0]?.passwordHash ?? null;
+    return user?.passwordHash ?? null;
   }
 
   async findByEmail(email: string): Promise<AuthUser | null> {

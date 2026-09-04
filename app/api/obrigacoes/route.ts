@@ -9,34 +9,14 @@ const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const STATUSES = new Set(["PENDING", "IN_PROGRESS", "COMPLETED", "OVERDUE", "CANCELED"]);
 const RECURRENCES = new Set(["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
 
-type ObligationRow = {
-  id: string;
-  companyId: string;
-  title: string;
-  description: string | null;
-  area: string;
-  priority: string;
-  status: string;
-  responsibleUserId: string | null;
-  responsibleName: string;
-  dueDate: Date;
-  completedAt: Date | null;
-  recurrence: string;
-  notes: string | null;
-  createdBy: string;
-  updatedBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 export async function GET() {
   try {
     const actor = await requireObligationActor();
-    const obligations = await prisma.$queryRaw<ObligationRow[]>`
-      SELECT * FROM "Obligation"
-      WHERE "companyId" = ${actor.companyId}
-      ORDER BY "dueDate" ASC, "createdAt" DESC
-    `;
+    const obligations = await prisma.obligation.findMany({
+      where: { companyId: actor.companyId },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    });
+
     return NextResponse.json({ success: true, obligations });
   } catch (error) {
     console.error("Erro ao listar obrigações:", error);
@@ -70,22 +50,27 @@ export async function POST(request: Request) {
     if (!responsibleName) throw new Error("Informe o responsável.");
     if (Number.isNaN(dueDate.getTime())) throw new Error("Informe uma data de vencimento válida.");
 
-    const id = randomUUID();
-    const completedAt = status === "COMPLETED" ? new Date() : null;
+    const obligation = await prisma.obligation.create({
+      data: {
+        id: randomUUID(),
+        companyId: actor.companyId,
+        title,
+        description,
+        area,
+        priority,
+        status,
+        responsibleUserId: actor.id,
+        responsibleName,
+        dueDate,
+        completedAt: status === "COMPLETED" ? new Date() : null,
+        recurrence,
+        notes,
+        createdBy: actor.id,
+        updatedBy: actor.id,
+      },
+    });
 
-    const rows = await prisma.$queryRaw<ObligationRow[]>`
-      INSERT INTO "Obligation" (
-        "id", "companyId", "title", "description", "area", "priority", "status",
-        "responsibleUserId", "responsibleName", "dueDate", "completedAt", "recurrence",
-        "notes", "createdBy", "updatedBy", "createdAt", "updatedAt"
-      ) VALUES (
-        ${id}, ${actor.companyId}, ${title}, ${description}, ${area}, ${priority}, ${status},
-        ${actor.id}, ${responsibleName}, ${dueDate}, ${completedAt}, ${recurrence},
-        ${notes}, ${actor.id}, ${actor.id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      ) RETURNING *
-    `;
-
-    return NextResponse.json({ success: true, obligation: rows[0] }, { status: 201 });
+    return NextResponse.json({ success: true, obligation }, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar obrigação:", error);
     return NextResponse.json(
