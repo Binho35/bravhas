@@ -5,6 +5,7 @@ const fixture = {
     ownerLogin: "e2eAlphaOwner",
     financialLogin: "e2eAlphaFinancial",
     hrLogin: "e2eAlphaHr",
+    managerLogin: "e2eAlphaManager",
     ownerId: "E2E-USER-ALPHA-OWNER",
     password: "E2E-Alpha-2026!Secure",
     accountId: "E2E-ACCOUNT-ALPHA",
@@ -65,6 +66,16 @@ test.describe("tenant isolation and negative RBAC", () => {
     await login(page, fixture.alpha.hrLogin, fixture.alpha.password);
     const response = await page.request.get(`/api/financeiro/contas/${fixture.alpha.accountId}`);
     expect(response.ok()).toBe(false);
+  });
+
+  test("scoped manager sees only self and direct reports, never foreign team or tenant", async ({ page }) => {
+    await login(page, fixture.alpha.managerLogin, fixture.alpha.password);
+    await page.goto("/rh/colaboradores");
+
+    await expect(page.getByText("E2E Alpha Gestor")).toBeVisible();
+    await expect(page.getByText("E2E Alpha Subordinado")).toBeVisible();
+    await expect(page.getByText("E2E Alpha Fora da Equipe")).toHaveCount(0);
+    await expect(page.getByText("E2E Beta Funcionário Estrangeiro")).toHaveCount(0);
   });
 
   test("financial create ignores client actor spoofing", async ({ page }) => {
