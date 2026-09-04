@@ -3,11 +3,12 @@ import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 
 import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE_NAME } from "../constants";
 import type { AuthUserRole } from "../types/AuthUser";
 
-export const SESSION_COOKIE_NAME = "bravhas_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
+export { SESSION_COOKIE_NAME } from "../constants";
 export const HRDP_ALLOWED_ROLES: AuthUserRole[] = ["OWNER", "ADMIN", "HR", "PAYROLL"];
 
 export function hashSessionToken(token: string) {
