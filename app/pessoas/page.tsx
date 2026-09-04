@@ -43,10 +43,10 @@ export default async function PessoasPage() {
 
   const data = await loadDashboardMetrics(actor.companyId);
   const metrics = [
-    { label: "Colaboradores ativos", value: String(data.active), helper: "Base consolidada", icon: UsersRound },
-    { label: "Admissões em andamento", value: String(data.admissions), helper: "Pipeline de entrada", icon: UserPlus },
-    { label: "Pendências de ponto", value: String(data.point), helper: "Gestor + RH", icon: ClipboardCheck },
-    { label: "Férias próximas", value: String(data.vacations), helper: "Próximos 30 dias", icon: CalendarClock },
+    { label: "Colaboradores ativos", value: String(data.active), helper: "Abrir base de colaboradores", icon: UsersRound, href: "/rh/colaboradores" },
+    { label: "Admissões em andamento", value: String(data.admissions), helper: "Abrir pipeline de admissões", icon: UserPlus, href: "/rh/admissoes" },
+    { label: "Pendências de ponto", value: String(data.point), helper: "Tratar ocorrências de ponto", icon: ClipboardCheck, href: "/dp/ponto" },
+    { label: "Férias próximas", value: String(data.vacations), helper: "Abrir gestão de férias", icon: CalendarClock, href: "/dp/ferias" },
   ];
 
   return (
@@ -60,12 +60,27 @@ export default async function PessoasPage() {
                 <h1 className="mt-5 text-3xl font-bold tracking-tight md:text-4xl">RH e DP em uma única visão operacional.</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100/90 md:text-base">Centralize colaboradores, ponto, admissões, férias, benefícios, documentos, desenvolvimento e atendimento de RH com rastreabilidade.</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:flex"><Link href="/rh" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-[#0b2947] shadow-lg shadow-black/10 transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><HeartHandshake className="h-4 w-4" aria-hidden="true"/> RH</Link><Link href="/dp" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><BadgeCheck className="h-4 w-4" aria-hidden="true"/> DP</Link></div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Link href="/rh" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-[#0b2947] shadow-lg shadow-black/10 transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><HeartHandshake className="h-4 w-4" aria-hidden="true"/> RH</Link>
+                <Link href="/dp" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><BadgeCheck className="h-4 w-4" aria-hidden="true"/> DP</Link>
+                <Link href="/rh/colaboradores/novo" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><UserPlus className="h-4 w-4" aria-hidden="true"/> Nova admissão</Link>
+              </div>
             </div>
           </section>
 
           <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores de RH e Departamento Pessoal">
-            {metrics.map((metric) => { const Icon = metric.icon; return <article key={metric.label} className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_35px_-24px_rgba(15,23,42,0.35)]"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-slate-500">{metric.label}</p><p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{metric.value}</p></div><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]" aria-hidden="true"><Icon className="h-5 w-5" /></div></div><p className="mt-4 text-xs font-medium text-slate-400">{metric.helper}</p></article>; })}
+            {metrics.map((metric) => {
+              const Icon = metric.icon;
+              return (
+                <Link key={metric.label} href={metric.href} className="group rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_35px_-24px_rgba(15,23,42,0.35)] transition hover:-translate-y-0.5 hover:border-[#9fc4e3] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/30">
+                  <div className="flex items-start justify-between gap-4">
+                    <div><p className="text-sm font-medium text-slate-500">{metric.label}</p><p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{metric.value}</p></div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a] transition group-hover:bg-[#dcecf8]" aria-hidden="true"><Icon className="h-5 w-5" /></div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-[#154b7a]"><span>{metric.helper}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true"/></div>
+                </Link>
+              );
+            })}
           </section>
 
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.75fr]">
@@ -76,10 +91,11 @@ export default async function PessoasPage() {
               </div>
             </article>
 
-            <aside className="rounded-[30px] border border-[#cfe2f3] bg-[#f0f7fd] p-6">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#154b7a]">Governança</p><h2 className="mt-2 text-xl font-bold tracking-tight text-[#0b2947]">Processos com responsabilidade definida.</h2><p className="mt-3 text-sm leading-6 text-slate-600">Gestores tratam sua equipe, RH faz a conferência e DP conduz o fechamento operacional. Cada ação deixa histórico.</p>
-              <div className="mt-6 rounded-2xl border border-white bg-white/75 p-4"><p className="text-sm font-semibold text-slate-900">Canal RH em aberto</p><p className="mt-1 text-2xl font-bold text-[#0b2947]">{data.tickets}</p><p className="mt-1 text-xs text-slate-500">Protocolos aguardando tratamento ou retorno.</p></div>
-            </aside>
+            <Link href="/rh/canal-rh" className="group rounded-[30px] border border-[#cfe2f3] bg-[#f0f7fd] p-6 transition hover:-translate-y-0.5 hover:border-[#9fc4e3] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/30">
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#154b7a]">Governança</p><h2 className="mt-2 text-xl font-bold tracking-tight text-[#0b2947]">Processos com responsabilidade definida.</h2></div><ArrowUpRight className="h-5 w-5 text-[#154b7a]" aria-hidden="true"/></div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Gestores tratam sua equipe, RH faz a conferência e DP conduz o fechamento operacional. Cada ação deixa histórico.</p>
+              <div className="mt-6 rounded-2xl border border-white bg-white/75 p-4"><p className="text-sm font-semibold text-slate-900">Canal RH em aberto</p><p className="mt-1 text-2xl font-bold text-[#0b2947]">{data.tickets}</p><p className="mt-1 text-xs text-slate-500">Clique para abrir os protocolos aguardando tratamento ou retorno.</p></div>
+            </Link>
           </section>
         </div>
       </main>
