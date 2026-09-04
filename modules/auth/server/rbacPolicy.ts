@@ -1,18 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getServerAuthUser } from "./session";
 
-type LinkedEmployeeRow = { employeeId: string };
-
 async function getLinkedEmployeeId(userId: string, companyId: string) {
-  const links = await prisma.$queryRaw<LinkedEmployeeRow[]>`
-    SELECT "employeeId"
-    FROM "UserEmployeeLink"
-    WHERE "userId" = ${userId}
-      AND "companyId" = ${companyId}
-    LIMIT 1
-  `;
+  const link = await prisma.userEmployeeLink.findFirst({
+    where: { userId, companyId },
+    select: { employeeId: true },
+  });
 
-  return links[0]?.employeeId ?? null;
+  return link?.employeeId ?? null;
 }
 
 export async function assertEmployeeScope(employeeId: string) {
