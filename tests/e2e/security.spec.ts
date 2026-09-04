@@ -7,12 +7,14 @@ const fixture = {
     hrLogin: "e2eAlphaHr",
     managerLogin: "e2eAlphaManager",
     ownerId: "E2E-USER-ALPHA-OWNER",
+    branchId: "E2E-BRANCH-ALPHA",
     password: "E2E-Alpha-2026!Secure",
     accountId: "E2E-ACCOUNT-ALPHA",
   },
   beta: {
     ownerLogin: "e2eBetaOwner",
     ownerId: "E2E-USER-BETA-OWNER",
+    branchId: "E2E-BRANCH-BETA",
     password: "E2E-Beta-2026!Secure",
     accountId: "E2E-ACCOUNT-BETA",
   },
@@ -50,6 +52,34 @@ test.describe("tenant isolation and negative RBAC", () => {
     const raw = await response.text();
     expect(raw).toContain(fixture.alpha.accountId);
     expect(raw).not.toContain(fixture.beta.accountId);
+  });
+
+  test("legacy financial route ignores a spoofed company filter", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+    const response = await page.request.get("/financeiro/contas?companyId=E2E-COMPANY-BETA");
+    expect(response.ok()).toBe(true);
+    const raw = await response.text();
+    expect(raw).toContain(fixture.alpha.accountId);
+    expect(raw).not.toContain(fixture.beta.accountId);
+  });
+
+  test("legacy financial route rejects a foreign branch and client actor spoofing", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+    const response = await page.request.post("/financeiro/contas", {
+      data: {
+        companyId: "E2E-COMPANY-BETA",
+        branchId: fixture.beta.branchId,
+        createdBy: fixture.beta.ownerId,
+        description: "E2E legacy tenant spoofing probe",
+        type: "PAYABLE",
+        amount: 20,
+        issueDate: "2026-10-01T12:00:00.000Z",
+        dueDate: "2026-10-20T12:00:00.000Z",
+      },
+    });
+    expect(response.ok()).toBe(false);
+    const raw = await response.text();
+    expect(raw).toContain("empresa autenticada");
   });
 
   test("beta actor can read beta resource while alpha resource stays foreign", async ({ page }) => {
