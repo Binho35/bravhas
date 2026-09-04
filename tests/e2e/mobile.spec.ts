@@ -21,31 +21,31 @@ async function expectNoSevereHorizontalOverflow(page: Page) {
 test.describe("mobile product smoke", () => {
   test("login, dashboard and mobile navigation remain usable without horizontal overflow", async ({ page }) => {
     await login(page);
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Abrir menu de navegação" })).toBeVisible();
     await expectNoSevereHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "Abrir menu de navegação" }).click();
     await expect(page.getByRole("dialog", { name: "Navegação principal" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Obrigações" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Obrigações", exact: true })).toBeVisible();
 
-    await page.getByRole("link", { name: "Obrigações" }).click();
+    await page.getByRole("link", { name: "Obrigações", exact: true }).click();
     await expect(page).toHaveURL(/\/obrigacoes$/);
-    await expect(page.getByRole("heading", { name: "Obrigações" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Obrigações", exact: true })).toBeVisible();
     await expectNoSevereHorizontalOverflow(page);
   });
 
   test("financial and cash-flow mobile surfaces use session-scoped APIs and remain navigable", async ({ page }) => {
     await login(page);
     await page.goto("/financeiro");
-    await expect(page.getByRole("heading", { name: "Financeiro" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Fluxo de Caixa" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Financeiro", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Fluxo de Caixa", exact: true })).toBeVisible();
     await expectNoSevereHorizontalOverflow(page);
 
-    await page.getByRole("link", { name: "Fluxo de Caixa" }).click();
+    await page.getByRole("link", { name: "Fluxo de Caixa", exact: true }).click();
     await expect(page).toHaveURL(/\/financeiro\/fluxo-caixa$/);
-    await expect(page.getByRole("heading", { name: "Fluxo de Caixa" })).toBeVisible();
-    await expect(page.getByLabel("Saldo inicial")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Fluxo de Caixa", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Saldo inicial", { exact: true })).toBeVisible();
     await expectNoSevereHorizontalOverflow(page);
   });
 
