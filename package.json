@@ -15,8 +15,9 @@
     "auth:set-password": "prisma generate && tsx scripts/set-user-password.ts",
     "e2e:seed": "prisma generate && tsx scripts/e2e-seed.ts",
     "test:e2e": "playwright test",
-    "test:e2e:auth": "playwright test tests/e2e/auth.spec.ts",
-    "test:e2e:security": "playwright test tests/e2e/security.spec.ts"
+    "test:e2e:auth": "playwright test tests/e2e/auth.spec.ts --project=chromium",
+    "test:e2e:security": "playwright test tests/e2e/security.spec.ts --project=chromium",
+    "test:e2e:mobile": "playwright test tests/e2e/mobile.spec.ts --project=mobile-chromium"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
