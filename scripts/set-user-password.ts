@@ -26,16 +26,16 @@ async function main() {
   if (!user) throw new Error("Usuário ativo não encontrado.");
 
   const passwordHash = hashPassword(password);
-  await prisma.$executeRaw`
-    UPDATE "User"
-    SET "passwordHash" = ${passwordHash}, "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "id" = ${user.id}
-  `;
-
-  await prisma.userSession.updateMany({
-    where: { userId: user.id, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, updatedAt: new Date() },
+    }),
+    prisma.userSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
 
   console.log(`Credencial atualizada para ${user.loginId}. Sessões anteriores foram revogadas.`);
 }
