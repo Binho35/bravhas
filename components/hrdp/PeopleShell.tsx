@@ -175,7 +175,7 @@ export function PeopleShell({ children }: { children: ReactNode }) {
                 <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-700">BravHAS</p><p className="truncate text-sm font-bold text-slate-900">Pessoas</p></div>
               </div>
 
-              <div className="hidden md:block"><p className="text-xs font-medium text-slate-500">Grupo Stocco Advogados</p><p className="mt-0.5 text-sm font-semibold text-slate-900">Central de RH & Departamento Pessoal</p></div>
+              <div className="hidden md:block"><p className="text-xs font-medium text-slate-500">BravHAS · ambiente multiempresa</p><p className="mt-0.5 text-sm font-semibold text-slate-900">Central de RH & Departamento Pessoal</p></div>
 
               <div className="flex shrink-0 items-center gap-2">
                 <button type="button" aria-label="Notificações" className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/40"><Bell className="h-[18px] w-[18px]" aria-hidden="true" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden="true" /></button>
