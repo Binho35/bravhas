@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
 import { requireFinancialActor } from "@/modules/financial/server/financialAuth";
+
+const CREATE_SAFE_ERRORS = [
+  "Informe a descrição da conta.",
+  "Tipo de conta financeira inválido.",
+  "Informe um valor válido.",
+  "Informe uma data de vencimento válida.",
+  "Data de emissão inválida.",
+  "Nenhuma unidade ativa disponível para o lançamento financeiro.",
+] as const;
 
 export async function GET() {
   try {
@@ -13,9 +23,9 @@ export async function GET() {
 
     return NextResponse.json({ success: true, accounts });
   } catch (error) {
-    console.error("Erro ao listar contas financeiras:", error);
+    logServerFailure("Erro ao listar contas financeiras", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível carregar as contas financeiras." },
+      { success: false, message: "Não foi possível carregar as contas financeiras." },
       { status: 401 },
     );
   }
@@ -101,9 +111,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, account }, { status: 201 });
   } catch (error) {
-    console.error("Erro ao criar conta financeira:", error);
+    logServerFailure("Erro ao criar conta financeira", error);
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : "Não foi possível criar a conta financeira." },
+      { success: false, message: safeErrorMessage(error, CREATE_SAFE_ERRORS, "Não foi possível criar a conta financeira.") },
       { status: 400 },
     );
   }
