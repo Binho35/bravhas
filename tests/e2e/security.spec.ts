@@ -84,10 +84,8 @@ test.describe("tenant isolation and negative RBAC", () => {
 
   test("beta actor can read beta resource while alpha resource stays foreign", async ({ page }) => {
     await login(page, fixture.beta.ownerLogin, fixture.beta.password);
-
     const own = await page.request.get(`/api/financeiro/contas/${fixture.beta.accountId}`);
     expect(own.ok()).toBe(true);
-
     const foreign = await page.request.get(`/api/financeiro/contas/${fixture.alpha.accountId}`);
     expect(foreign.ok()).toBe(false);
   });
@@ -101,16 +99,35 @@ test.describe("tenant isolation and negative RBAC", () => {
   test("scoped manager sees only self and direct reports, never foreign team or tenant", async ({ page }) => {
     await login(page, fixture.alpha.managerLogin, fixture.alpha.password);
     await page.goto("/rh/colaboradores");
-
     await expect(page.getByText("E2E Alpha Gestor")).toBeVisible();
     await expect(page.getByText("E2E Alpha Subordinado")).toBeVisible();
     await expect(page.getByText("E2E Alpha Fora da Equipe")).toHaveCount(0);
     await expect(page.getByText("E2E Beta Funcionário Estrangeiro")).toHaveCount(0);
   });
 
+  test("Pessoas dashboard metrics are scoped to the authenticated tenant", async ({ page }) => {
+    await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
+    await page.goto("/pessoas");
+    await expect(page).toHaveURL(/\/pessoas$/);
+    const alphaMetric = page.locator("article").filter({ hasText: "Colaboradores ativos" });
+    await expect(alphaMetric).toContainText("3");
+
+    const logoutResponse = await page.request.post("/api/auth/logout");
+    expect(logoutResponse.ok()).toBe(true);
+    await login(page, fixture.beta.ownerLogin, fixture.beta.password);
+    await page.goto("/pessoas");
+    const betaMetric = page.locator("article").filter({ hasText: "Colaboradores ativos" });
+    await expect(betaMetric).toContainText("1");
+  });
+
+  test("financial role cannot open company-wide Pessoas dashboard", async ({ page }) => {
+    await login(page, fixture.alpha.financialLogin, fixture.alpha.password);
+    await page.goto("/pessoas");
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test("financial create ignores client actor spoofing", async ({ page }) => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
-
     const response = await page.request.post("/api/financeiro/contas", {
       data: {
         description: "E2E spoofing probe",
@@ -122,7 +139,6 @@ test.describe("tenant isolation and negative RBAC", () => {
         companyId: "E2E-COMPANY-BETA",
       },
     });
-
     expect(response.ok()).toBe(true);
     const body = await response.json();
     expect(body.account.companyId).toBe("E2E-COMPANY-ALPHA");
@@ -132,7 +148,6 @@ test.describe("tenant isolation and negative RBAC", () => {
 
   test("obligations derive responsible actor and tenant from authenticated session", async ({ page }) => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
-
     const response = await page.request.post("/api/obrigacoes", {
       data: {
         title: "E2E actor spoofing obligation",
@@ -147,7 +162,6 @@ test.describe("tenant isolation and negative RBAC", () => {
         companyId: "E2E-COMPANY-BETA",
       },
     });
-
     expect(response.ok()).toBe(true);
     const body = await response.json();
     expect(body.obligation.companyId).toBe("E2E-COMPANY-ALPHA");
@@ -157,7 +171,6 @@ test.describe("tenant isolation and negative RBAC", () => {
 
   test("beta tenant cannot read or update a valid alpha obligation id", async ({ page }) => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
-
     const created = await page.request.post("/api/obrigacoes", {
       data: {
         title: "E2E Alpha cross-tenant obligation",
@@ -183,10 +196,7 @@ test.describe("tenant isolation and negative RBAC", () => {
     expect(readBody.message).toBe("Obrigação não encontrada.");
 
     const foreignUpdate = await page.request.put(`/api/obrigacoes/${alphaObligationId}`, {
-      data: {
-        title: "E2E Beta attempted overwrite",
-        status: "COMPLETED",
-      },
+      data: { title: "E2E Beta attempted overwrite", status: "COMPLETED" },
     });
     expect(foreignUpdate.status()).toBe(404);
     const updateBody = await foreignUpdate.json();
