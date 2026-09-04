@@ -93,8 +93,8 @@ const operationalFiles = [
 for (const absolute of operationalFiles) {
   const content = await readFile(absolute, "utf8");
   const relative = path.relative(root, absolute);
-  if (/db\s+push\s+--accept-data-loss/i.test(content)) failures.push(`${relative}: db push destrutivo proibido`);
-  if (/prisma\s+migrate\s+reset/i.test(content)) failures.push(`${relative}: migrate reset proibido`);
+  if (/db\s+push\s+--accept-data-loss/i.test(content)) failures.push(`${relative}: destructive database push command detected`);
+  if (/prisma\s+migrate\s+reset/i.test(content)) failures.push(`${relative}: destructive migration command detected`);
 }
 
 if (failures.length) {
