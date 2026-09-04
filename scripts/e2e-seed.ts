@@ -13,11 +13,16 @@ export const E2E = {
     ownerId: "E2E-USER-ALPHA-OWNER",
     financialId: "E2E-USER-ALPHA-FINANCIAL",
     hrId: "E2E-USER-ALPHA-HR",
+    managerId: "E2E-USER-ALPHA-MANAGER",
     ownerLogin: "e2eAlphaOwner",
     financialLogin: "e2eAlphaFinancial",
     hrLogin: "e2eAlphaHr",
+    managerLogin: "e2eAlphaManager",
     password: "E2E-Alpha-2026!Secure",
     accountId: "E2E-ACCOUNT-ALPHA",
+    managerEmployeeId: "E2E-EMP-ALPHA-MANAGER",
+    reportEmployeeId: "E2E-EMP-ALPHA-REPORT",
+    outsideEmployeeId: "E2E-EMP-ALPHA-OUTSIDE",
   },
   beta: {
     companyId: "E2E-COMPANY-BETA",
@@ -28,6 +33,7 @@ export const E2E = {
     financialLogin: "e2eBetaFinancial",
     password: "E2E-Beta-2026!Secure",
     accountId: "E2E-ACCOUNT-BETA",
+    employeeId: "E2E-EMP-BETA-FOREIGN",
   },
 } as const;
 
@@ -40,7 +46,7 @@ async function upsertUser(input: {
   loginId: string;
   name: string;
   email: string;
-  role: "OWNER" | "FINANCIAL" | "HR";
+  role: "OWNER" | "FINANCIAL" | "HR" | "OPERATIONAL";
   password: string;
 }) {
   const user = await prisma.user.upsert({
@@ -78,6 +84,106 @@ async function upsertUser(input: {
 
   await prisma.userSession.deleteMany({ where: { userId: user.id } });
   return user;
+}
+
+async function configureManagerScope(input: {
+  companyId: string;
+  branchId: string;
+  managerUserId: string;
+}) {
+  await prisma.hrEmployee.upsert({
+    where: { id: E2E.alpha.managerEmployeeId },
+    update: {
+      companyId: input.companyId,
+      branchId: input.branchId,
+      fullName: "E2E Alpha Gestor",
+      status: "ACTIVE",
+      active: true,
+      managerId: null,
+    },
+    create: {
+      id: E2E.alpha.managerEmployeeId,
+      companyId: input.companyId,
+      branchId: input.branchId,
+      employeeNumber: "E2E-ALPHA-MGR",
+      fullName: "E2E Alpha Gestor",
+      status: "ACTIVE",
+      active: true,
+    },
+  });
+
+  await prisma.hrEmployee.upsert({
+    where: { id: E2E.alpha.reportEmployeeId },
+    update: {
+      companyId: input.companyId,
+      branchId: input.branchId,
+      fullName: "E2E Alpha Subordinado",
+      status: "ACTIVE",
+      active: true,
+      managerId: E2E.alpha.managerEmployeeId,
+    },
+    create: {
+      id: E2E.alpha.reportEmployeeId,
+      companyId: input.companyId,
+      branchId: input.branchId,
+      employeeNumber: "E2E-ALPHA-REPORT",
+      fullName: "E2E Alpha Subordinado",
+      status: "ACTIVE",
+      active: true,
+      managerId: E2E.alpha.managerEmployeeId,
+    },
+  });
+
+  await prisma.hrEmployee.upsert({
+    where: { id: E2E.alpha.outsideEmployeeId },
+    update: {
+      companyId: input.companyId,
+      branchId: input.branchId,
+      fullName: "E2E Alpha Fora da Equipe",
+      status: "ACTIVE",
+      active: true,
+      managerId: null,
+    },
+    create: {
+      id: E2E.alpha.outsideEmployeeId,
+      companyId: input.companyId,
+      branchId: input.branchId,
+      employeeNumber: "E2E-ALPHA-OUTSIDE",
+      fullName: "E2E Alpha Fora da Equipe",
+      status: "ACTIVE",
+      active: true,
+    },
+  });
+
+  await prisma.$executeRaw`
+    INSERT INTO "UserEmployeeLink" ("userId", "employeeId", "companyId")
+    VALUES (${input.managerUserId}, ${E2E.alpha.managerEmployeeId}, ${input.companyId})
+    ON CONFLICT ("userId") DO UPDATE
+      SET "employeeId" = EXCLUDED."employeeId", "companyId" = EXCLUDED."companyId"
+  `;
+
+  const profileId = "E2E-PROFILE-ALPHA-MANAGER";
+  const permissionId = "E2E-PERM-ALPHA-MANAGER-COLLABORADORES";
+
+  await prisma.$executeRaw`
+    INSERT INTO "AccessProfile" ("id", "companyId", "name", "description", "master", "system", "active", "updatedAt")
+    VALUES (${profileId}, ${input.companyId}, 'Gestor de Setor', 'E2E gestor com escopo restrito', false, true, true, NOW())
+    ON CONFLICT ("companyId", "name") DO UPDATE
+      SET "description" = EXCLUDED."description", "active" = true, "updatedAt" = NOW()
+  `;
+
+  await prisma.$executeRaw`
+    INSERT INTO "AccessPermission" ("id", "profileId", "resource", "canView", "canCreate", "canEdit", "canApprove", "canDelete", "canExport", "updatedAt")
+    VALUES (${permissionId}, ${profileId}, 'colaboradores', true, false, false, false, false, false, NOW())
+    ON CONFLICT ("profileId", "resource") DO UPDATE
+      SET "canView" = true, "canCreate" = false, "canEdit" = false, "canApprove" = false, "canDelete" = false, "canExport" = false, "updatedAt" = NOW()
+  `;
+
+  await prisma.$executeRaw`
+    INSERT INTO "UserAccessProfile" ("userId", "profileId")
+    VALUES (${input.managerUserId}, ${profileId})
+    ON CONFLICT ("userId") DO UPDATE SET "profileId" = EXCLUDED."profileId"
+  `;
 }
 
 async function main() {
@@ -164,6 +270,19 @@ async function main() {
     password: E2E.alpha.password,
   });
 
+  const alphaManager = await upsertUser({
+    id: E2E.alpha.managerId,
+    companyId: alphaCompany.id,
+    branchId: alphaBranch.id,
+    companyPrefix: "e2ealpha",
+    username: "Manager",
+    loginId: E2E.alpha.managerLogin,
+    name: "E2E Alpha Manager",
+    email: "manager.alpha@example.test",
+    role: "OPERATIONAL",
+    password: E2E.alpha.password,
+  });
+
   const betaOwner = await upsertUser({
     id: E2E.beta.ownerId,
     companyId: betaCompany.id,
@@ -188,6 +307,33 @@ async function main() {
     email: "financial.beta@example.test",
     role: "FINANCIAL",
     password: E2E.beta.password,
+  });
+
+  await configureManagerScope({
+    companyId: alphaCompany.id,
+    branchId: alphaBranch.id,
+    managerUserId: alphaManager.id,
+  });
+
+  await prisma.hrEmployee.upsert({
+    where: { id: E2E.beta.employeeId },
+    update: {
+      companyId: betaCompany.id,
+      branchId: betaBranch.id,
+      fullName: "E2E Beta Funcionário Estrangeiro",
+      status: "ACTIVE",
+      active: true,
+      managerId: null,
+    },
+    create: {
+      id: E2E.beta.employeeId,
+      companyId: betaCompany.id,
+      branchId: betaBranch.id,
+      employeeNumber: "E2E-BETA-FOREIGN",
+      fullName: "E2E Beta Funcionário Estrangeiro",
+      status: "ACTIVE",
+      active: true,
+    },
   });
 
   await prisma.financialAccount.upsert({
