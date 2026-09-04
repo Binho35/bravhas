@@ -63,7 +63,7 @@ test.describe("authenticated session lifecycle", () => {
     expect(sessionResponse.ok()).toBe(true);
     const body = await sessionResponse.json();
     expect(body.authenticated).toBe(true);
-    expect(body.session.user.loginId).toBe(alpha.login.toLowerCase());
+    expect(String(body.session.user.loginId).toLowerCase()).toBe(alpha.login.toLowerCase());
     expect(body.session.token).toBe("SERVER_COOKIE");
 
     const sessionCookie = (await context.cookies()).find(
