@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 
 interface AppShellProps {
@@ -16,16 +16,41 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigationId = useId();
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const navigationRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setMobileMenuOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusable = navigationRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+
+      if (!focusable || focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
@@ -34,6 +59,7 @@ export function AppShell({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
+      menuTriggerRef.current?.focus();
     };
   }, [mobileMenuOpen]);
 
@@ -54,6 +80,7 @@ export function AppShell({
             />
 
             <aside
+              ref={navigationRef}
               id={navigationId}
               role="dialog"
               aria-modal="true"
@@ -61,6 +88,7 @@ export function AppShell({
               className="relative h-full w-[min(20rem,88vw)] bg-[#0B2947] shadow-2xl"
             >
               <button
+                ref={closeButtonRef}
                 type="button"
                 aria-label="Fechar menu"
                 onClick={() => setMobileMenuOpen(false)}
@@ -76,6 +104,7 @@ export function AppShell({
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="relative h-16 shrink-0 border-b border-[#E2E8F0] bg-white">
             <button
+              ref={menuTriggerRef}
               type="button"
               aria-label="Abrir menu de navegação"
               aria-expanded={mobileMenuOpen}
