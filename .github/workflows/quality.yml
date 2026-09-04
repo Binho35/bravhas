@@ -56,8 +56,14 @@ jobs:
 
       - name: Migration safety
         run: |
-          ! grep -R "db push --accept-data-loss" --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' .
-          ! grep -R "migrate reset" --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' .
+          if grep -R "db push --accept-data-loss" --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' . | grep -vF 'grep -R "db push --accept-data-loss"' | grep -q .; then
+            echo "Forbidden destructive Prisma db push found"
+            exit 1
+          fi
+          if grep -R "migrate reset" --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' . | grep -vF 'grep -R "migrate reset"' | grep -q .; then
+            echo "Forbidden prisma migrate reset found"
+            exit 1
+          fi
 
       - name: Security regression
         run: |
