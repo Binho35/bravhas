@@ -105,6 +105,18 @@ test.describe("tenant isolation and negative RBAC", () => {
     await expect(page.getByText("E2E Beta Funcionário Estrangeiro")).toHaveCount(0);
   });
 
+  test("Gestor de Setor Ponto is limited to self and direct reports", async ({ page }) => {
+    await login(page, fixture.alpha.managerLogin, fixture.alpha.password);
+    await page.goto("/dp/ponto");
+    await expect(page).toHaveURL(/\/dp\/ponto$/);
+    const employeeSelect = page.locator('select[name="employeeId"]');
+    await expect(employeeSelect.locator("option")).toContainText(["Selecione", "E2E Alpha Gestor · E2E-ALPHA-MGR", "E2E Alpha Subordinado · E2E-ALPHA-REPORT"]);
+    await expect(employeeSelect.locator("option", { hasText: "E2E Alpha Fora da Equipe" })).toHaveCount(0);
+    await expect(employeeSelect.locator("option", { hasText: "E2E Beta Funcionário Estrangeiro" })).toHaveCount(0);
+    await expect(page.getByText("E2E Alpha Fora da Equipe")).toHaveCount(0);
+    await expect(page.getByText("E2E Beta Funcionário Estrangeiro")).toHaveCount(0);
+  });
+
   test("Pessoas dashboard metrics are scoped to the authenticated tenant", async ({ page }) => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
     await page.goto("/pessoas");
