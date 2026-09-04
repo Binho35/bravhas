@@ -5,10 +5,25 @@ const allowedHigh = new Set([
   'GHSA-rgwj-5xj2-c3m3',
 ]);
 
+const AUDIT_TIMEOUT_MS = 120_000;
+
 let raw;
 try {
-  raw = execFileSync('npm', ['audit', '--omit=dev', '--json'], { encoding: 'utf8' });
+  raw = execFileSync('npm', ['audit', '--omit=dev', '--json'], {
+    encoding: 'utf8',
+    timeout: AUDIT_TIMEOUT_MS,
+    killSignal: 'SIGTERM',
+    env: {
+      ...process.env,
+      npm_config_fetch_retries: '2',
+      npm_config_fetch_retry_mintimeout: '1000',
+      npm_config_fetch_retry_maxtimeout: '10000',
+    },
+  });
 } catch (error) {
+  if (error?.code === 'ETIMEDOUT' || error?.signal === 'SIGTERM') {
+    throw new Error(`Dependency audit timed out after ${AUDIT_TIMEOUT_MS / 1000}s; failing closed.`);
+  }
   raw = error.stdout?.toString() ?? '';
 }
 
