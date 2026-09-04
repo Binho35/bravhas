@@ -117,6 +117,15 @@ test.describe("tenant isolation and negative RBAC", () => {
     await expect(page.getByText("E2E Beta Funcionário Estrangeiro")).toHaveCount(0);
   });
 
+  test("Gestor de Setor is denied Férias by the real default RBAC matrix", async ({ page }) => {
+    await login(page, fixture.alpha.managerLogin, fixture.alpha.password);
+    const response = await page.request.get("/dp/ferias");
+    expect(response.ok()).toBe(false);
+    const raw = await response.text();
+    expect(raw).not.toContain("Programar férias");
+    expect(raw).not.toContain("E2E Alpha Subordinado");
+  });
+
   test("Pessoas dashboard metrics are scoped to the authenticated tenant", async ({ page }) => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
     await page.goto("/pessoas");
