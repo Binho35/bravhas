@@ -38,7 +38,14 @@ async function createEmployee(formData: FormData) {
   const actor = await hrdpPermission.colaboradores("create");
 
   const fullName = text(formData, "fullName");
+  const cpf = text(formData, "cpf");
+  const hireDate = dateValue(formData, "hireDate");
+  const employmentType = text(formData, "employmentType") as "CLT" | "EXPERIENCE" | "INTERN" | "APPRENTICE" | "CONTRACTOR" | "TEMPORARY" | "OTHER" | null;
+
   if (!fullName) throw new Error("Nome completo é obrigatório.");
+  if (!cpf) throw new Error("CPF é obrigatório para iniciar a admissão.");
+  if (!hireDate) throw new Error("Data de admissão é obrigatória para iniciar a admissão.");
+  if (!employmentType) throw new Error("Tipo de contrato é obrigatório para iniciar a admissão.");
 
   const branchId = text(formData, "branchId");
   const departmentId = text(formData, "departmentId");
@@ -62,7 +69,6 @@ async function createEmployee(formData: FormData) {
     if (!manager) throw new Error("Gestor inválido ou fora do escopo autorizado.");
   }
 
-  const employmentType = text(formData, "employmentType") as "CLT" | "EXPERIENCE" | "INTERN" | "APPRENTICE" | "CONTRACTOR" | "TEMPORARY" | "OTHER" | null;
   const workMode = text(formData, "workMode") as "ONSITE" | "HYBRID" | "REMOTE" | null;
 
   const employee = await prisma.hrEmployee.create({
@@ -75,13 +81,13 @@ async function createEmployee(formData: FormData) {
       employeeNumber: text(formData, "employeeNumber"),
       fullName,
       socialName: text(formData, "socialName"),
-      cpf: text(formData, "cpf"),
+      cpf,
       rg: text(formData, "rg"),
       birthDate: dateValue(formData, "birthDate"),
       emailPersonal: text(formData, "emailPersonal"),
       emailCorporate: text(formData, "emailCorporate"),
       phone: text(formData, "phone"),
-      hireDate: dateValue(formData, "hireDate"),
+      hireDate,
       employmentType,
       workMode,
       weeklyHours: decimalText(formData, "weeklyHours"),
@@ -109,7 +115,7 @@ async function createEmployee(formData: FormData) {
   revalidatePath("/rh/colaboradores");
   revalidatePath("/pessoas");
   revalidatePath("/rh/admissoes");
-  redirect(`/rh/colaboradores/${employee.id}`);
+  redirect(`/rh/colaboradores/${employee.id}/documentos`);
 }
 
 const Field = ({ name, label, placeholder, type = "text", required = false }: { name: string; label: string; placeholder: string; type?: string; required?: boolean }) => (
@@ -119,10 +125,10 @@ const Field = ({ name, label, placeholder, type = "text", required = false }: { 
   </label>
 );
 
-const SelectField = ({ name, label, children }: { name: string; label: string; children: React.ReactNode }) => (
+const SelectField = ({ name, label, children, required = false }: { name: string; label: string; children: React.ReactNode; required?: boolean }) => (
   <label className="block">
-    <span className="text-xs font-semibold text-slate-600">{label}</span>
-    <select name={name} className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50">{children}</select>
+    <span className="text-xs font-semibold text-slate-600">{label}{required ? <span className="text-rose-500"> *</span> : null}</span>
+    <select name={name} required={required} className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50">{children}</select>
   </label>
 );
 
@@ -143,8 +149,14 @@ export default async function NewEmployeePage() {
         <Link href="/rh/colaboradores" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-[#154b7a]"><ArrowLeft className="h-4 w-4" /> Voltar para colaboradores</Link>
 
         <div className="mt-5 flex flex-col justify-between gap-5 md:flex-row md:items-end">
-          <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">People Core</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0b2947]">Novo colaborador</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Cadastro único para RH e DP. Novos registros entram obrigatoriamente em pré-admissão e só ficam ativos após conferência documental.</p></div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-800">Persistência protegida pelo People Core</div>
+          <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">People Core</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0b2947]">Novo colaborador</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Cadastro único para RH e DP. O fluxo agora conduz automaticamente da pré-admissão para documentos, conferência e ativação.</p></div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">Etapa 1 de 3 · Dados admissionais</div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4"><p className="text-xs font-bold text-[#154b7a]">1. Cadastro</p><p className="mt-1 text-xs text-slate-600">Dados mínimos para iniciar a admissão.</p></div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-700">2. Documentos</p><p className="mt-1 text-xs text-slate-500">Cadastrar e conferir o dossiê.</p></div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-700">3. Ativação</p><p className="mt-1 text-xs text-slate-500">Concluir admissão e liberar RH/DP.</p></div>
         </div>
 
         <form action={createEmployee} className="mt-7 space-y-5">
@@ -152,7 +164,7 @@ export default async function NewEmployeePage() {
             <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><UserRound className="h-5 w-5" /></div><div><h2 className="font-bold">Dados pessoais</h2><p className="text-xs text-slate-500">Identificação e contato do colaborador.</p></div></div>
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               <div className="md:col-span-2 xl:col-span-2"><Field name="fullName" label="Nome completo" placeholder="Nome conforme documento" required /></div>
-              <Field name="cpf" label="CPF" placeholder="000.000.000-00" />
+              <Field name="cpf" label="CPF" placeholder="000.000.000-00" required />
               <Field name="birthDate" label="Data de nascimento" placeholder="" type="date" />
               <Field name="emailPersonal" label="E-mail pessoal" placeholder="nome@email.com" type="email" />
               <Field name="phone" label="Telefone" placeholder="(11) 99999-9999" />
@@ -165,8 +177,8 @@ export default async function NewEmployeePage() {
           <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><BriefcaseBusiness className="h-5 w-5" /></div><div><h2 className="font-bold">Vínculo e contrato</h2><p className="text-xs text-slate-500">Dados admissionais, remuneração e jornada contratada.</p></div></div>
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              <Field name="hireDate" label="Data de admissão" placeholder="" type="date" />
-              <SelectField name="employmentType" label="Tipo de contrato"><option value="">Selecione</option><option value="CLT">CLT</option><option value="EXPERIENCE">Experiência</option><option value="INTERN">Estágio</option><option value="APPRENTICE">Aprendiz</option><option value="CONTRACTOR">Prestador</option><option value="TEMPORARY">Temporário</option><option value="OTHER">Outro</option></SelectField>
+              <Field name="hireDate" label="Data de admissão" placeholder="" type="date" required />
+              <SelectField name="employmentType" label="Tipo de contrato" required><option value="">Selecione</option><option value="CLT">CLT</option><option value="EXPERIENCE">Experiência</option><option value="INTERN">Estágio</option><option value="APPRENTICE">Aprendiz</option><option value="CONTRACTOR">Prestador</option><option value="TEMPORARY">Temporário</option><option value="OTHER">Outro</option></SelectField>
               <Field name="employeeNumber" label="Matrícula" placeholder="Código interno" />
               <Field name="baseSalary" label="Salário base" placeholder="0,00" />
               <Field name="weeklyHours" label="Carga horária semanal" placeholder="44" />
@@ -186,11 +198,11 @@ export default async function NewEmployeePage() {
           </section>
 
           <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
-            <article className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3"><FileText className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold">Observações e documentos</h2><p className="text-xs text-slate-500">Informações complementares para conferência do RH/DP.</p></div></div><label className="mt-5 block"><span className="text-xs font-semibold text-slate-600">Observações internas</span><textarea name="notes" rows={5} placeholder="Registre apenas informações necessárias ao processo de RH/DP." className="mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-50" /></label></article>
-            <aside className="rounded-3xl border border-blue-100 bg-[#eef6fc] p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-sm"><BadgeCheck className="h-5 w-5" /></div><h3 className="mt-4 font-bold text-[#0b2947]">Cadastro mestre</h3><p className="mt-2 text-sm leading-6 text-slate-600">Após salvar, o colaborador entra em pré-admissão. A ativação exige a conferência dos dados e documentos no fluxo de admissões.</p></aside>
+            <article className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3"><FileText className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold">Observações</h2><p className="text-xs text-slate-500">Informações complementares para conferência do RH/DP.</p></div></div><label className="mt-5 block"><span className="text-xs font-semibold text-slate-600">Observações internas</span><textarea name="notes" rows={5} placeholder="Registre apenas informações necessárias ao processo de RH/DP." className="mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-50" /></label></article>
+            <aside className="rounded-3xl border border-blue-100 bg-[#eef6fc] p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-sm"><BadgeCheck className="h-5 w-5" /></div><h3 className="mt-4 font-bold text-[#0b2947]">O que acontece ao salvar?</h3><p className="mt-2 text-sm leading-6 text-slate-600">O colaborador entra em pré-admissão e você será levado automaticamente para a etapa de documentos. Depois da conferência, a tela de Admissões libera a ativação.</p></aside>
           </section>
 
-          <div className="flex flex-col-reverse justify-end gap-3 pb-8 sm:flex-row"><Link href="/rh/colaboradores" className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-600">Cancelar</Link><button type="submit" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/10 transition hover:bg-[#154b7a]"><Save className="h-4 w-4" />Salvar colaborador</button></div>
+          <div className="flex flex-col-reverse justify-end gap-3 pb-8 sm:flex-row"><Link href="/rh/colaboradores" className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-600">Cancelar</Link><button type="submit" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/10 transition hover:bg-[#154b7a]"><Save className="h-4 w-4" />Salvar e continuar para documentos</button></div>
         </form>
       </div>
     </main>

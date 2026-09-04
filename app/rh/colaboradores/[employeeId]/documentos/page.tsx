@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BadgeCheck, FilePlus2, Files } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, FilePlus2, Files } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
@@ -92,12 +92,28 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
   const { employeeId } = await params;
   const employee = await prisma.hrEmployee.findFirst({
     where: { id: employeeId, companyId: actor.companyId },
-    select: { id: true, fullName: true, status: true, documents: { orderBy: { createdAt: "desc" } } },
+    select: {
+      id: true,
+      fullName: true,
+      status: true,
+      cpf: true,
+      hireDate: true,
+      employmentType: true,
+      documents: { orderBy: { createdAt: "desc" } },
+    },
   });
 
   if (!employee) notFound();
 
   const verified = employee.documents.filter((item) => item.verifiedAt).length;
+  const allDocumentsVerified = employee.documents.length > 0 && verified === employee.documents.length;
+  const readyForAdmission = Boolean(
+    employee.status === "PRE_ADMISSION" &&
+    employee.cpf &&
+    employee.hireDate &&
+    employee.employmentType &&
+    allDocumentsVerified,
+  );
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const expiryLimit = new Date(today);
@@ -111,11 +127,30 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
       <div className="mx-auto max-w-[1360px]">
         <Link href={`/rh/colaboradores/${employee.id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-[#154b7a]"><ArrowLeft className="h-4 w-4" />Voltar ao dossiê</Link>
 
-        <div className="mt-5">
-          <p className="text-[11px] font-bold uppercase tracking-[.18em] text-[#154b7a]">Dossiê · Documentos</p>
-          <h1 className="mt-2 text-3xl font-bold text-[#0b2947]">Documentos de {employee.fullName}</h1>
-          <p className="mt-2 text-sm text-slate-600">Controle de documentos físicos/digitais, conferência, validade e referência de armazenamento.</p>
+        <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-[#154b7a]">Dossiê · Documentos</p>
+            <h1 className="mt-2 text-3xl font-bold text-[#0b2947]">Documentos de {employee.fullName}</h1>
+            <p className="mt-2 text-sm text-slate-600">Etapa 2 de 3 da admissão: cadastre e confira ao menos um documento para liberar a ativação.</p>
+          </div>
+          {employee.status === "PRE_ADMISSION" ? (
+            readyForAdmission ? (
+              <Link href="/rh/admissoes" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white">
+                Ir para concluir admissão <ArrowRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">Etapa 2 de 3 · Documentos pendentes</div>
+            )
+          ) : (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">Admissão concluída</div>
+          )}
         </div>
+
+        <section className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-700">1. Cadastro</p><p className="mt-1 text-xs text-slate-600">Dados admissionais registrados.</p></div>
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4"><p className="text-xs font-bold text-[#154b7a]">2. Documentos</p><p className="mt-1 text-xs text-slate-600">{verified}/{employee.documents.length} documentos conferidos.</p></div>
+          <div className={`rounded-2xl border p-4 ${readyForAdmission ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}><p className={`text-xs font-bold ${readyForAdmission ? "text-emerald-700" : "text-slate-700"}`}>3. Ativação</p><p className="mt-1 text-xs text-slate-500">{readyForAdmission ? "Pronta para conclusão." : "Libera após conferência documental."}</p></div>
+        </section>
 
         <section className="mt-7 grid gap-4 sm:grid-cols-3">
           {[["Documentos", employee.documents.length], ["Conferidos", verified], ["Vencem em até 30 dias", expiring]].map(([label, value]) => <article key={String(label)} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs text-slate-500">{label}</p><strong className="mt-2 block text-2xl text-[#0b2947]">{String(value)}</strong></article>)}
@@ -136,7 +171,7 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
 
           <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 p-6"><Files className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold text-[#0b2947]">Arquivo funcional</h2><p className="text-xs text-slate-500">Histórico documental do colaborador.</p></div></div>
-            {employee.documents.length === 0 ? <div className="p-14 text-center text-sm text-slate-500">Nenhum documento cadastrado.</div> : <div className="divide-y divide-slate-100">{employee.documents.map((item) => <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><p className="mt-1 text-xs text-slate-400">{item.type} · {item.storageKey ?? "Sem referência de arquivo"}</p></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>)}</div>}
+            {employee.documents.length === 0 ? <div className="p-14 text-center text-sm text-slate-500">Nenhum documento cadastrado. Cadastre ao menos um documento para avançar.</div> : <div className="divide-y divide-slate-100">{employee.documents.map((item) => <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><p className="mt-1 text-xs text-slate-400">{item.type} · {item.storageKey ?? "Sem referência de arquivo"}</p></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>)}</div>}
           </article>
         </section>
       </div>
