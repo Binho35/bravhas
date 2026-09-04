@@ -1,29 +1,15 @@
 "use client";
 
-import {
-  type ReactNode,
-  useEffect,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
-import {
-  usePathname,
-  useRouter,
-} from "next/navigation";
-
-import {
-  getCurrentSession,
-} from "../services/getCurrentSession";
+import { getCurrentSession } from "../services/getCurrentSession";
 
 interface AuthGuardProps {
   children: ReactNode;
 }
 
-const DEVELOPMENT_PREVIEW_PREFIXES = [
-  "/pessoas",
-  "/rh",
-  "/dp",
-];
+const DEVELOPMENT_PREVIEW_PREFIXES = ["/pessoas", "/rh", "/dp"];
 
 function isDevelopmentPreview(pathname: string) {
   if (process.env.NODE_ENV !== "development") {
@@ -35,56 +21,46 @@ function isDevelopmentPreview(pathname: string) {
   );
 }
 
-export function AuthGuard({
-  children,
-}: AuthGuardProps) {
-  const router =
-    useRouter();
-
-  const pathname =
-    usePathname();
-
-  const previewAllowed =
-    isDevelopmentPreview(pathname);
-
-  const [
-    checking,
-    setChecking,
-  ] = useState(true);
-
-  const [
-    allowed,
-    setAllowed,
-  ] = useState(false);
+export function AuthGuard({ children }: AuthGuardProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const previewAllowed = isDevelopmentPreview(pathname);
+  const [checking, setChecking] = useState(true);
+  const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/login" || previewAllowed) {
+    let active = true;
+
+    async function validateAccess() {
+      if (pathname === "/login" || previewAllowed) {
+        if (active) {
+          setAllowed(true);
+          setChecking(false);
+        }
+        return;
+      }
+
+      setChecking(true);
+      const { authenticated } = await getCurrentSession();
+
+      if (!active) return;
+
+      if (!authenticated) {
+        setAllowed(false);
+        setChecking(false);
+        router.replace("/login");
+        return;
+      }
+
       setAllowed(true);
       setChecking(false);
-
-      return;
     }
 
-    const {
-      authenticated,
-    } = getCurrentSession();
-
-    if (!authenticated) {
-      setAllowed(false);
-      setChecking(false);
-
-      router.replace("/login");
-
-      return;
-    }
-
-    setAllowed(true);
-    setChecking(false);
-  }, [
-    pathname,
-    previewAllowed,
-    router,
-  ]);
+    void validateAccess();
+    return () => {
+      active = false;
+    };
+  }, [pathname, previewAllowed, router]);
 
   if (pathname === "/login" || previewAllowed) {
     return children;
@@ -97,11 +73,9 @@ export function AuthGuard({
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
             BravHAS
           </p>
-
           <h2 className="mt-2 text-lg font-bold text-[#0B2947]">
             Validando acesso...
           </h2>
-
           <p className="mt-2 text-sm text-[#64748B]">
             Verificando sua sessão.
           </p>
