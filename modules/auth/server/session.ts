@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { AuthUserRole } from "../types/AuthUser";
 
-const SESSION_COOKIE_NAME = "bravhas_session";
+export const SESSION_COOKIE_NAME = "bravhas_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
 export const HRDP_ALLOWED_ROLES: AuthUserRole[] = ["OWNER", "ADMIN", "HR", "PAYROLL"];
@@ -14,7 +14,7 @@ export function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function getServerAuthUser() {
+export async function getServerAuthSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -35,7 +35,12 @@ export async function getServerAuthUser() {
     data: { lastSeenAt: new Date() },
   });
 
-  return session.user;
+  return session;
+}
+
+export async function getServerAuthUser() {
+  const session = await getServerAuthSession();
+  return session?.user ?? null;
 }
 
 export async function requireServerRole(allowedRoles: AuthUserRole[]) {
