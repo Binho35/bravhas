@@ -3,6 +3,18 @@ import { getServerAuthUser } from "./session";
 
 type LinkedEmployeeRow = { employeeId: string };
 
+async function getLinkedEmployeeId(userId: string, companyId: string) {
+  const links = await prisma.$queryRaw<LinkedEmployeeRow[]>`
+    SELECT "employeeId"
+    FROM "UserEmployeeLink"
+    WHERE "userId" = ${userId}
+      AND "companyId" = ${companyId}
+    LIMIT 1
+  `;
+
+  return links[0]?.employeeId ?? null;
+}
+
 export async function assertEmployeeScope(employeeId: string) {
   const user = await getServerAuthUser();
   if (!user) throw new Error("Sessão inválida ou expirada.");
@@ -17,12 +29,7 @@ export async function assertEmployeeScope(employeeId: string) {
     return employee;
   }
 
-  const links = await prisma.$queryRawUnsafe<LinkedEmployeeRow[]>(
-    `SELECT "employeeId" FROM "UserEmployeeLink" WHERE "userId"=$1 AND "companyId"=$2 LIMIT 1`,
-    user.id,
-    user.companyId,
-  );
-  const linkedEmployeeId = links[0]?.employeeId;
+  const linkedEmployeeId = await getLinkedEmployeeId(user.id, user.companyId);
   if (!linkedEmployeeId) throw new Error("Usuário operacional sem vínculo funcional configurado.");
 
   if (employee.id !== linkedEmployeeId && employee.managerId !== linkedEmployeeId) {
@@ -40,12 +47,7 @@ export async function getEmployeeScopeWhere() {
     return { companyId: user.companyId };
   }
 
-  const links = await prisma.$queryRawUnsafe<LinkedEmployeeRow[]>(
-    `SELECT "employeeId" FROM "UserEmployeeLink" WHERE "userId"=$1 AND "companyId"=$2 LIMIT 1`,
-    user.id,
-    user.companyId,
-  );
-  const linkedEmployeeId = links[0]?.employeeId;
+  const linkedEmployeeId = await getLinkedEmployeeId(user.id, user.companyId);
   if (!linkedEmployeeId) throw new Error("Usuário operacional sem vínculo funcional configurado.");
 
   return {
