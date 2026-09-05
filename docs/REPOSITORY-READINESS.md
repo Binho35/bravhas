@@ -19,6 +19,7 @@ O Quality atual cobre:
 - fresh PostgreSQL desde zero;
 - authenticated browser E2E;
 - cross-tenant/RBAC negativo;
+- desktop consolidated product smoke;
 - mobile product smoke.
 
 Nenhum desses gates deve ser reduzido a warning para obter verde.
@@ -50,7 +51,7 @@ Regras de código:
 - consultas por ID devem combinar recurso + tenant ou passar por helper de autorização equivalente;
 - Gestor de Setor respeita vínculo funcional e subordinados quando a política de escopo se aplica.
 
-Os E2E usam Empresa A e Empresa B sintéticas e recursos válidos dos dois tenants para provar negação real de acesso estrangeiro.
+Os E2E usam Empresa A e Empresa B sintéticas e recursos válidos dos dois tenants para provar negação real de acesso estrangeiro. O Ciclo 2 amplia a regressão para Pessoas, Documentos, Obrigações e Indicadores, preservando Financeiro.
 
 ## Fixtures
 
@@ -65,6 +66,13 @@ Migrations históricas são preservadas. Não usar para correção:
 - remoção/regravação de migrations integradas.
 
 O gate `fresh-database` deve continuar provando migrations + seed + status em PostgreSQL vazio.
+
+## Health e readiness
+
+- `/api/health` comprova liveness e conectividade básica com PostgreSQL;
+- `/api/readiness` comprova se o ambiente pode receber tráfego segundo as pré-condições conhecidas.
+
+Enquanto o BravHAS não possuir storage privado persistente homologado para produção, `/api/readiness` deve permanecer fail-closed no ambiente produtivo.
 
 ## Repository Ready
 
