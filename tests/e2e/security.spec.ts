@@ -130,15 +130,17 @@ test.describe("tenant isolation and negative RBAC", () => {
     await login(page, fixture.alpha.ownerLogin, fixture.alpha.password);
     await page.goto("/pessoas");
     await expect(page).toHaveURL(/\/pessoas$/);
-    const alphaMetric = page.locator("article").filter({ hasText: "Colaboradores ativos" });
+    const alphaMetric = page.getByRole("link", { name: /Colaboradores ativos/ });
     await expect(alphaMetric).toContainText("3");
+    await expect(alphaMetric).toHaveAttribute("href", "/rh/colaboradores");
 
     const logoutResponse = await page.request.post("/api/auth/logout");
     expect(logoutResponse.ok()).toBe(true);
     await login(page, fixture.beta.ownerLogin, fixture.beta.password);
     await page.goto("/pessoas");
-    const betaMetric = page.locator("article").filter({ hasText: "Colaboradores ativos" });
+    const betaMetric = page.getByRole("link", { name: /Colaboradores ativos/ });
     await expect(betaMetric).toContainText("1");
+    await expect(betaMetric).toHaveAttribute("href", "/rh/colaboradores");
   });
 
   test("financial role cannot open company-wide Pessoas dashboard", async ({ page }) => {
