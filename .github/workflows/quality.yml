@@ -191,5 +191,8 @@ jobs:
       - name: Cross-tenant and RBAC negative E2E
         run: npm run test:e2e:security
 
+      - name: Desktop consolidated product smoke
+        run: npm run test:e2e:desktop
+
       - name: Mobile product smoke
         run: npm run test:e2e:mobile
