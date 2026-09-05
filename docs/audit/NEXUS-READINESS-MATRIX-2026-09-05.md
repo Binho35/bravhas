@@ -24,9 +24,9 @@ Até aprovação formal dos pesos e fechamento das evidências externas, o resul
 |---|---|---|
 | Backend principal | COMPROVADO | APIs e regras persistentes para Financeiro, Obrigações, Indicadores, auth e RH/DP existente |
 | Frontend principal | COMPROVADO | rotas operacionais para módulos críticos |
-| Persistência | COMPROVADO | Prisma/PostgreSQL, migrations e fresh DB no Quality |
-| Testes automatizados | COMPROVADO | auth, security, financeiro, desktop consolidado e mobile no CI do PR |
-| Segurança de repositório | COMPROVADO | security regression, server-side auth, RBAC e cross-tenant |
+| Persistência | COMPROVADO | Prisma/PostgreSQL, migrations e fresh DB no Quality da base; revalidar no HEAD final |
+| Testes automatizados | PARCIAL | auth, security, financeiro, desktop consolidado e mobile estão configurados no CI; exige Quality verde no HEAD final |
+| Segurança de repositório | PARCIAL | security regression, server-side auth, RBAC e cross-tenant configurados; exige Quality verde no HEAD final |
 | Documentação técnica | COMPROVADO | readiness, arquitetura e runbooks no repositório |
 
 **Resultado:** `NÃO AUDITADO COM PRECISÃO` até aprovação de pesos e Quality final do HEAD.
@@ -35,10 +35,10 @@ Até aprovação formal dos pesos e fechamento das evidências externas, o resul
 
 | Critério | Estado | Evidência |
 |---|---|---|
-| Fluxo ponta a ponta desktop | PARCIAL | smoke consolidado automatizado; homologação humana integral ainda pendente |
+| Fluxo ponta a ponta desktop | PARCIAL | smoke consolidado automatizado configurado; homologação humana integral ainda pendente e Quality final deve passar |
 | UX principal | PARCIAL | interfaces funcionais; revisão humana completa de UX não concluída |
-| Desktop | COMPROVADO | smoke E2E consolidado adicionado ao Quality |
-| Mobile | COMPROVADO | mobile smoke existente no Quality |
+| Desktop | PARCIAL | smoke E2E consolidado adicionado ao Quality; aguarda evidência verde no HEAD final |
+| Mobile | PARCIAL | mobile smoke existente no Quality; aguarda evidência verde no HEAD final |
 | Tratamento de erro | PARCIAL | sanitização e estados de erro existem, sem catálogo integral de falhas homologado |
 | Dados reais/persistentes | COMPROVADO | Financeiro, Documentos, Agenda/Obrigações e Indicadores usam fontes persistentes |
 | Homologação humana | NÃO EXECUTADO | exige execução/aceite humano em ambiente de homologação |
@@ -51,11 +51,11 @@ Até aprovação formal dos pesos e fechamento das evidências externas, o resul
 |---|---|---|
 | Banco produtivo | EXTERNO | nenhum ambiente produtivo auditado neste ciclo |
 | Storage privado persistente | BLOQUEADO | contrato vendor-neutral preparado; provider não configurado |
-| Backup | DOCUMENTADO/PARCIAL | runbook criado; execução real não comprovada |
-| Restore | DOCUMENTADO/PARCIAL | procedimento criado; restore real não executado |
+| Backup | PARCIAL | runbook criado; configuração/execução real não comprovadas |
+| Restore | PARCIAL | procedimento criado; restore real não executado |
 | Observabilidade | PARCIAL | health existente e readiness fail-closed criado; alertas externos não configurados |
-| Deploy | DOCUMENTADO/PARCIAL | runbook criado; deploy real não executado |
-| Rollback | DOCUMENTADO/PARCIAL | runbook criado; exercício real não comprovado |
+| Deploy | PARCIAL | runbook criado; deploy real não executado |
+| Rollback | PARCIAL | runbook criado; exercício real não comprovado |
 | Secrets | EXTERNO | gestão/rotação dependem do ambiente produtivo |
 | Branch protection | BLOQUEADO | `main` auditada sem proteção; alteração depende de autorização |
 
@@ -80,17 +80,17 @@ Até aprovação formal dos pesos e fechamento das evidências externas, o resul
 
 | Módulo | Código | E2E | Mobile | Segurança | Produto |
 |---|---|---|---|---|---|
-| Dashboard | COMPROVADO | COMPROVADO | COMPROVADO | PARCIAL | PARCIAL |
-| Pessoas | COMPROVADO | COMPROVADO | COMPROVADO | COMPROVADO | PARCIAL |
-| Admissão | COMPROVADO | COMPROVADO | PARCIAL | COMPROVADO | PARCIAL |
-| Documentos | COMPROVADO | COMPROVADO | PARCIAL | COMPROVADO | PARCIAL |
-| Financeiro | COMPROVADO | COMPROVADO | COMPROVADO | COMPROVADO | PARCIAL |
-| Fluxo de Caixa | COMPROVADO | COMPROVADO | COMPROVADO | COMPROVADO | PARCIAL |
-| Obrigações | COMPROVADO | COMPROVADO | COMPROVADO | COMPROVADO | PARCIAL |
-| Agenda | COMPROVADO | COMPROVADO | PARCIAL | PARCIAL | PARCIAL |
-| Indicadores | COMPROVADO | COMPROVADO | PARCIAL | COMPROVADO | PARCIAL |
+| Dashboard | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Pessoas | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Admissão | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Documentos | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Financeiro | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Fluxo de Caixa | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Obrigações | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Agenda | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
+| Indicadores | COMPROVADO | PARCIAL | PARCIAL | PARCIAL | PARCIAL |
 
-`Produto = PARCIAL` enquanto a homologação humana integral não estiver registrada.
+Os estados de E2E/Mobile/Segurança só podem mudar para `COMPROVADO` após o workflow `Quality` do HEAD final concluir com sucesso. `Produto` permanece `PARCIAL` enquanto a homologação humana integral não estiver registrada.
 
 ## Gates de produção que não podem ser compensados por percentual
 
