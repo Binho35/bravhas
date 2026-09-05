@@ -23,11 +23,19 @@ export default function DocumentsPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/hr/documents", { cache: "no-store" })
-      .then(async (response) => { const payload = await response.json(); if (!response.ok || !payload.success) throw new Error(payload?.message ?? "Não foi possível carregar os documentos."); if (!cancelled) setDocuments(payload.documents); })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload?.message ?? "Não foi possível carregar os documentos.");
+        if (!cancelled) {
+          setDocuments(payload.documents);
+          setLoadedAt(Date.now());
+        }
+      })
       .catch((caught) => { if (!cancelled) setError(caught instanceof Error ? caught.message : "Não foi possível carregar os documentos."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -40,7 +48,11 @@ export default function DocumentsPage() {
   }, [documents, query]);
 
   const verified = documents.filter((item) => item.verifiedAt).length;
-  const expiring = documents.filter((item) => item.expiresAt && new Date(item.expiresAt) >= new Date() && new Date(item.expiresAt).getTime() <= Date.now() + 30 * 86400000).length;
+  const expiring = loadedAt === null ? 0 : documents.filter((item) => {
+    if (!item.expiresAt) return false;
+    const expiresAt = new Date(item.expiresAt).getTime();
+    return expiresAt >= loadedAt && expiresAt <= loadedAt + 30 * 86400000;
+  }).length;
 
   return (
     <PermissionGuard resource="DOCUMENTS" action="VIEW">
