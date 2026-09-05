@@ -4,22 +4,38 @@ Data: 2026-09-05
 
 ## Escopo
 
-Auditoria executiva e técnica da `main` do BravHAS antes de qualquer novo ciclo de desenvolvimento.
+Auditoria executiva e técnica da `main` do BravHAS e evolução do PR #37 para fechamento de homologação sem expansão de grandes módulos.
 
 ## Checkpoint auditado
 
 - Repositório: `Binho35/bravhas`
 - Branch padrão: `main`
-- HEAD auditado: `8684944553b42d87ecbef656cb67d8a97c821b69`
+- HEAD auditado da `main`: `8684944553b42d87ecbef656cb67d8a97c821b69`
+- HEAD inicial do Ciclo 2: `13311a20189d220bcb8a347bd46cb789ca42f1d0`
 - Último merge relevante: PR #36 — `feat: conectar Indicadores e Documentos às fontes reais`
-- PRs abertos no início da auditoria: 0
 - Workflow principal: `.github/workflows/quality.yml`
-- Quality no HEAD auditado: SUCCESS
+- Quality da `main` no HEAD auditado: SUCCESS
 - `main` protegida: NÃO (`protected=false`)
 
-## Evidências de repository readiness
+## Evolução técnica do Ciclo 2
 
-O workflow Quality atual executa, em modo fail-closed:
+O PR #37 deixou de ser apenas documental e passou a conter hardening técnico verificável:
+
+- helper compartilhado de autenticação E2E;
+- smoke E2E desktop consolidado para Dashboard, Pessoas, Admissões, Documentos, Financeiro, Fluxo de Caixa, Obrigações, Agenda, Indicadores e logout;
+- integração do smoke desktop ao workflow `Quality`;
+- fixtures adicionais de readiness restritas a TEST/HOMOLOGATION;
+- regressões cross-tenant com recursos Beta válidos para Pessoas, Documentos, Obrigações e Indicadores, preservando a cobertura financeira existente;
+- contrato vendor-neutral `DocumentStorage` para provider futuro;
+- `/api/readiness` fail-closed em produção enquanto não houver storage produtivo;
+- runbook de backup/restore;
+- runbook de deploy/rollback;
+- documentação mínima de observabilidade;
+- matriz objetiva de readiness sem percentual inventado.
+
+## Repository readiness
+
+O Quality permanece fail-closed e cobre:
 
 - `npm ci` determinístico;
 - dependency audit de produção;
@@ -36,141 +52,117 @@ O workflow Quality atual executa, em modo fail-closed:
 - fresh PostgreSQL;
 - authenticated browser E2E;
 - cross-tenant/RBAC negativo;
+- desktop consolidated product smoke;
 - mobile product smoke.
 
-O run de `main` para o HEAD `8684944553b42d87ecbef656cb67d8a97c821b69` concluiu com sucesso.
+Nenhum gate foi removido ou transformado em warning.
 
-## Estado dos módulos — evidência disponível
+## Estado dos módulos
 
 ### Dashboard
 
-Estado: FUNCIONAL / HOMOLOGAÇÃO HUMANA PENDENTE.
-
-Evidência: rota principal existe e já é coberta por smoke autenticado/mobile.
+Código funcional e incluído no smoke desktop/mobile. Homologação humana integral ainda pendente.
 
 ### Pessoas / RH / DP
 
-Estado: FUNCIONAL PARCIAL / HOMOLOGAÇÃO PENDENTE.
+Funcional e coberto por testes de tenant/escopo. A fronteira estratégica BravHAS × BravHOS continua deliberadamente não alterada.
 
-Evidência: shell de Pessoas e superfícies RH/DP existem e possuem smoke mobile. O escopo estratégico BravHAS × BravHOS permanece deliberadamente não resolvido.
+### Admissões
+
+Fluxo existente preservado. Ativação exige cadastro mínimo e documentos conferidos; smoke desktop cobre a superfície de admissão.
 
 ### Documentos
 
-Estado: FUNCIONAL EM HOMOLOGAÇÃO / BLOQUEADO PARA PRODUÇÃO.
+Dados persistentes, tenant scope, rota protegida e upload local de homologação permanecem funcionais. Cross-tenant agora inclui tentativa de Alpha acessar documento Beta válido. Produção continua bloqueada até provider privado persistente real.
 
-Evidência: central usa `/api/hr/documents`, dados persistentes, rota protegida para abertura de arquivo e escopo da empresa autenticada. O próprio produto trata arquivo disponível/metadata de forma distinta.
+### Financeiro / Fluxo de Caixa
 
-Bloqueio de produção: não há evidência auditada nesta execução de object storage privado persistente configurado em produção. Filesystem/local storage de homologação não deve ser declarado solução produtiva.
+Cobertura específica anterior preservada, incluindo cross-tenant financeiro e fluxo de caixa. Smoke desktop e mobile complementam a navegação.
 
-### Financeiro
+### Obrigações / Agenda
 
-Estado: FUNCIONAL / HOMOLOGAÇÃO PENDENTE.
-
-Evidência: Quality inclui E2E específico para Financeiro e Fluxo de Caixa; trabalhos recentes incluem tipagem Prisma de status financeiros e saldo inicial persistente.
-
-### Fluxo de Caixa
-
-Estado: FUNCIONAL / HOMOLOGAÇÃO PENDENTE.
-
-Evidência: E2E dedicado existe e o mobile smoke acessa `/financeiro/fluxo-caixa` com saldo inicial visível.
-
-### Obrigações
-
-Estado: FUNCIONAL / HOMOLOGAÇÃO PENDENTE.
-
-Evidência: rota e módulo estão ativos e são cobertos por smoke mobile.
-
-### Agenda
-
-Estado: FUNCIONAL / HOMOLOGAÇÃO DESKTOP DEDICADA PENDENTE.
-
-Evidência: `/agenda` consulta `/api/obrigacoes`, deriva hoje/semana/30 dias/atrasadas e mantém histórico de concluídas a partir de `completedAt`.
+Obrigações possuem regressões de ator/tenant e acesso estrangeiro. Agenda continua derivada de Obrigações persistentes e passa a integrar o smoke desktop consolidado.
 
 ### Indicadores
 
-Estado: FUNCIONAL / HOMOLOGAÇÃO DESKTOP DEDICADA PENDENTE.
+Fonte persistente preservada. O Ciclo 2 adiciona regressão explícita comparando indicadores de Tenant Alpha e Tenant Beta após troca de sessão.
 
-Evidência: `/indicadores` consulta `/api/indicadores` e apresenta financeiro, pessoas e obrigações usando dados persistentes. A tela declara explicitamente ausência de métricas simuladas.
+## Storage
 
-## Segurança e multi-tenancy
+Estado atual: local filesystem permitido apenas fora de produção.
 
-Estado: FORTE NO REPOSITÓRIO / PRODUÇÃO AINDA NÃO HOMOLOGADA.
+O Ciclo 2 adicionou contrato vendor-neutral `DocumentStorage` com:
 
-Evidências:
+- save;
+- read;
+- delete;
+- health;
+- scope obrigatório de company/employee;
+- política centralizável de MIME e tamanho;
+- metadata básica do objeto.
 
-- auth server-side;
-- cookie HttpOnly;
-- SameSite;
-- Secure condicionado a produção;
-- session API server-side;
-- security regression no CI;
-- E2E cross-tenant com recursos válidos de Empresa A e Empresa B;
-- E2E RBAC negativo;
-- bloqueio a SQL unsafe;
-- seed E2E recusado fora de TEST/HOMOLOGATION.
+Nenhum provider foi contratado ou conectado. O adapter local existente ainda deve ser migrado para o contrato antes de ligar um provider produtivo.
 
-## Migrations e banco
+## Health e readiness
 
-Estado do repositório: REPOSITORY READY.
+`/api/health` continua validando aplicação + banco com erro sanitizado fora de desenvolvimento.
 
-Evidência: `prisma migrate deploy`, fresh database, seed e migration status fazem parte do Quality.
+`/api/readiness` foi adicionado para distinguir aplicação viva de aplicação apta a receber tráfego. Em produção, o readiness permanece 503 enquanto o provider produtivo de documentos não estiver configurado/homologado.
 
-Produção: NÃO AUDITADA COMO PRONTA nesta execução. É necessária evidência do PostgreSQL real, política de backup, restore e operação.
+## Backup / Restore
+
+Runbook criado em `docs/operations/BACKUP-RESTORE.md`.
+
+Estado: `DOCUMENTADO`.
+
+Não existe alegação de backup executado, restore passado ou DR exercitado sem evidência externa real.
+
+## Deploy / Rollback
+
+Runbook criado em `docs/operations/DEPLOY-ROLLBACK.md` com build, env, migrations, health/readiness, smoke pós-deploy, rollback de aplicação e tratamento de migrations irreversíveis.
+
+Estado: `DOCUMENTADO`.
+
+## Observabilidade
+
+Documento `docs/operations/OBSERVABILITY.md` registra health, readiness, sanitização de logs, estado de request/correlation ID e evidências exigidas para produção.
+
+Estado: `PARCIAL` até monitoramento/alertas externos e testes de falha serem comprovados.
 
 ## Branch protection
 
-Risco: ALTO DE GOVERNANÇA.
+Risco de governança permanece: `main` auditada com `protected=false`.
 
-A `main` está com `protected=false`. O próprio `docs/REPOSITORY-READINESS.md` já determina que isso permaneça aberto enquanto não houver proteção/ruleset equivalente.
+Nenhuma configuração foi alterada neste ciclo. A recomendação permanece PR obrigatório + Quality obrigatório + bloqueio de force push/delete + revisão mínima/proteção de administradores quando viável.
 
-Ação recomendada fora deste PR: exigir PR + Quality, bloquear force push e exclusão da `main`, preservando fluxo viável para proprietário único.
+## Readiness Matrix
 
-## E2E — lacuna identificada
+A matriz detalhada está em `docs/audit/NEXUS-READINESS-MATRIX-2026-09-05.md`.
 
-Cobertura atual observada:
+Percentuais continuam `NÃO AUDITADO COM PRECISÃO` até aprovação de pesos pela governança e fechamento das evidências externas. A proposta inicial é peso unitário igual por critério dentro de cada dimensão, com regra adicional de que P0 aberto não pode ser compensado por média.
 
-- auth;
-- security/cross-tenant/RBAC;
-- financeiro/fluxo de caixa;
-- mobile smoke.
-
-Lacuna P1:
-
-Criar smoke desktop dedicado para consolidar navegação e carregamento de:
-
-- Dashboard;
-- Documentos;
-- Indicadores;
-- Agenda;
-- Pessoas;
-- Financeiro;
-- Fluxo de Caixa;
-- Obrigações;
-- logout.
-
-A escrita direta desse teste durante esta execução foi bloqueada pela camada de segurança do conector ao detectar material de credencial sintética existente no fixture E2E. Não houve tentativa de contorno. A cobertura deve ser implementada reutilizando um helper/fixture de autenticação sem duplicar segredo no novo arquivo.
-
-## Produção — bloqueios
+## Produção — bloqueios ainda abertos
 
 ### P0
 
-1. Storage privado persistente de produção para documentos: SEM EVIDÊNCIA DE PROVIDER REAL HOMOLOGADO.
-2. Backup/restore: SEM EVIDÊNCIA DE RESTORE PASSED ou DR EXERCISED.
-3. Infraestrutura produtiva real: NÃO AUDITADA nesta execução.
+1. Storage privado persistente de produção sem provider real homologado.
+2. Backup/restore sem evidência real de restore aprovado/DR exercitado.
+3. Infraestrutura produtiva não auditada como pronta.
 
 ### P1
 
-1. Branch protection/ruleset da `main` está ausente.
-2. Homologação humana ponta a ponta ainda é necessária.
-3. Smoke desktop consolidado dos módulos de gestão ainda deve ser adicionado.
-4. Observabilidade/alertas/health/readiness precisam de evidência operacional externa antes de declarar Production Ready.
-5. Deploy real e rollback precisam de evidência externa.
+1. `main` sem branch protection/ruleset equivalente.
+2. Homologação humana ponta a ponta pendente.
+3. Observabilidade externa/alertas pendentes.
+4. Deploy real e rollback exercitado pendentes.
+5. Secrets/rotação dependem do ambiente produtivo.
 
 ### P2
 
-- revisão de UX/responsividade por matriz de telas além do mobile smoke atual;
+- request/correlation ID global;
+- matriz ampliada de UX/acessibilidade;
 - teste de carga/capacidade;
-- documentação operacional de incidentes e suporte.
+- runbook de incidentes/suporte.
 
 ### P3
 
@@ -180,31 +172,15 @@ A escrita direta desse teste durante esta execução foi bloqueada pela camada d
 
 ## Sobreposição BravHAS × BravHOS
 
-Funcionalidades atualmente presentes no BravHAS que potencialmente pertencem também ao domínio BravHOS:
-
-- Pessoas;
-- colaboradores;
-- pré-admissão/admissões;
-- documentos de colaboradores;
-- ponto;
-- férias;
-- afastamentos;
-- obrigações de RH/DP;
-- indicadores de pessoas e DP.
-
-Nenhum código deve ser movido ou removido até decisão da governança central.
+Permanece potencial sobreposição em Pessoas, colaboradores, admissão, documentos funcionais, ponto, férias, afastamentos e indicadores/obrigações de RH/DP. Nenhum código foi movido, apagado, duplicado ou separado neste ciclo.
 
 ## Avaliação de evolução
-
-Percentuais não são declarados neste documento porque não foi executada uma matriz quantitativa completa de todos os requisitos de produto, produção e comercialização. Declarar números sem denominador auditado violaria a governança do portfólio.
 
 - Desenvolvimento: NÃO AUDITADO COM PRECISÃO
 - Produto: NÃO AUDITADO COM PRECISÃO
 - Produção: NÃO AUDITADO COM PRECISÃO
 - Comercial: NÃO AUDITADO COM PRECISÃO
 
-## Próximo marco recomendado
+## Próximo marco
 
-**BravHAS — Homologation Closure**
-
-Objetivo único: fechar evidência de homologação ponta a ponta sem expansão de escopo, começando por smoke desktop consolidado, validação humana dos fluxos críticos e preparação vendor-neutral de storage/backup/observabilidade, sem contratar infraestrutura ou alterar produção sem autorização.
+O próximo marco só deve ser definido pela governança após auditoria do relatório final do Ciclo 2. Nexus não deve iniciar outro ciclo automaticamente.
