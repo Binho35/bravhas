@@ -12,10 +12,24 @@ const statusClass: Record<string, string> = { PRE_ADMISSION: "bg-amber-50 text-a
 function dateLabel(value: Date | null | undefined) { return value ? new Intl.DateTimeFormat("pt-BR").format(value) : "—"; }
 function moneyLabel(value: { toString(): string } | null | undefined) { if (!value) return "—"; const numeric = Number(value.toString()); return Number.isFinite(numeric) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numeric) : "—"; }
 
+function isEmployeeScopeDenial(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return [
+    "Colaborador fora do escopo autorizado.",
+    "Usuário operacional sem vínculo funcional configurado.",
+    "Colaborador fora da equipe autorizada para este gestor.",
+  ].includes(error.message);
+}
+
 export default async function EmployeeDossierPage({ params }: { params: Promise<{ employeeId: string }> }) {
   const actor = await hrdpPermission.colaboradores("view");
   const { employeeId } = await params;
-  await assertEmployeeScope(employeeId);
+  try {
+    await assertEmployeeScope(employeeId);
+  } catch (error) {
+    if (isEmployeeScopeDenial(error)) notFound();
+    throw error;
+  }
   const employee = await prisma.hrEmployee.findFirst({
     where: { id: employeeId, companyId: actor.companyId },
     include: {
