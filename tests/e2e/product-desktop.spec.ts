@@ -19,10 +19,10 @@ test.describe("desktop consolidated product smoke", () => {
       { path: "/indicadores", heading: "Indicadores" },
     ] as const;
 
-    for (const module of modules) {
-      await page.goto(module.path);
-      await expect(page).toHaveURL(new RegExp(`${module.path.replaceAll("/", "\\/")}$`));
-      await expect(page.getByRole("heading", { name: module.heading, exact: true })).toBeVisible();
+    for (const surface of modules) {
+      await page.goto(surface.path);
+      await expect(page).toHaveURL(new RegExp(`${surface.path.replaceAll("/", "\\/")}$`));
+      await expect(page.getByRole("heading", { name: surface.heading, exact: true })).toBeVisible();
     }
 
     await logout(page);
