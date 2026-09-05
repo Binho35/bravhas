@@ -12,7 +12,7 @@ export async function GET() {
     const companyId = user.companyId;
     const now = new Date();
     const next30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const openFinancial = { companyId, status: { in: ["OPEN", "PARTIALLY_PAID", "OVERDUE"] as const } };
+    const openStatuses = ["OPEN", "PARTIALLY_PAID", "OVERDUE"];
 
     const [
       activeEmployees, preAdmissions, activeLeaves, upcomingVacations, pendingTime,
@@ -24,17 +24,17 @@ export async function GET() {
       prisma.hrLeaveRequest.count({ where: { companyId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: now }, OR: [{ endDate: null }, { endDate: { gte: now } }] } }),
       prisma.hrVacationRequest.count({ where: { companyId, status: { in: ["PENDING", "APPROVED"] }, startDate: { gte: now, lte: next30 } } }),
       prisma.hrTimeOccurrence.count({ where: { companyId, status: "PENDING" } }),
-      prisma.financialAccount.aggregate({ where: { ...openFinancial, type: "PAYABLE" }, _count: true, _sum: { amount: true, paidAmount: true } }),
-      prisma.financialAccount.aggregate({ where: { ...openFinancial, type: "RECEIVABLE" }, _count: true, _sum: { amount: true, paidAmount: true } }),
-      prisma.financialAccount.count({ where: { ...openFinancial, type: "PAYABLE", dueDate: { lt: now } } }),
-      prisma.financialAccount.count({ where: { ...openFinancial, type: "RECEIVABLE", dueDate: { lt: now } } }),
+      prisma.financialAccount.aggregate({ where: { companyId, status: { in: openStatuses }, type: "PAYABLE" }, _count: true, _sum: { amount: true, paidAmount: true } }),
+      prisma.financialAccount.aggregate({ where: { companyId, status: { in: openStatuses }, type: "RECEIVABLE" }, _count: true, _sum: { amount: true, paidAmount: true } }),
+      prisma.financialAccount.count({ where: { companyId, status: { in: openStatuses }, type: "PAYABLE", dueDate: { lt: now } } }),
+      prisma.financialAccount.count({ where: { companyId, status: { in: openStatuses }, type: "RECEIVABLE", dueDate: { lt: now } } }),
       prisma.obligation.count({ where: { companyId, status: { notIn: ["COMPLETED", "CANCELED"] } } }),
       prisma.obligation.count({ where: { companyId, status: { notIn: ["COMPLETED", "CANCELED"] }, dueDate: { lt: now } } }),
       prisma.obligation.count({ where: { companyId, status: { notIn: ["COMPLETED", "CANCELED"] }, dueDate: { gte: now, lte: next30 } } }),
       prisma.obligation.count({ where: { companyId, status: "COMPLETED" } }),
     ]);
 
-    const outstanding = (row: typeof payables) => Number(row._sum.amount ?? 0) - Number(row._sum.paidAmount ?? 0);
+    const outstanding = (row: typeof payables) => Number(row._sum?.amount ?? 0) - Number(row._sum?.paidAmount ?? 0);
 
     return NextResponse.json({
       success: true,
