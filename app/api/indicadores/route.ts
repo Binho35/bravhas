@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { FinancialAccountStatus } from "@/lib/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { getServerAuthUser } from "@/modules/auth/server/session";
 
@@ -12,7 +13,11 @@ export async function GET() {
     const companyId = user.companyId;
     const now = new Date();
     const next30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const openStatuses = ["OPEN", "PARTIALLY_PAID", "OVERDUE"];
+    const openStatuses: FinancialAccountStatus[] = [
+      FinancialAccountStatus.OPEN,
+      FinancialAccountStatus.PARTIALLY_PAID,
+      FinancialAccountStatus.OVERDUE,
+    ];
 
     const [
       activeEmployees, preAdmissions, activeLeaves, upcomingVacations, pendingTime,
