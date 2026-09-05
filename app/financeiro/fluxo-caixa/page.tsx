@@ -29,6 +29,12 @@ interface CashFlowApiAccount {
   transactions: FinancialTransaction[];
 }
 
+interface OpeningBalanceApi {
+  amount: number;
+  asOfDate: string;
+  updatedAt: string;
+}
+
 const EMPTY_SUMMARY: CashFlowSummaryData = {
   totalReceivable: 0,
   totalPayable: 0,
@@ -40,11 +46,20 @@ const EMPTY_SUMMARY: CashFlowSummaryData = {
   buckets: [],
 };
 
+function todayKey() {
+  const now = new Date();
+  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+}
+
 export default function CashFlowPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<CashFlowAccount[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-  const [openingBalance, setOpeningBalance] = useState("0");
+  const [openingBalance, setOpeningBalance] = useState("0,00");
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(todayKey());
+  const [openingBalanceUpdatedAt, setOpeningBalanceUpdatedAt] = useState<string | null>(null);
+  const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
+  const [openingBalanceFeedback, setOpeningBalanceFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +93,13 @@ export default function CashFlowPage() {
           })),
         );
         setTransactions(apiAccounts.flatMap((account) => account.transactions));
+
+        const persisted = data.openingBalance as OpeningBalanceApi | null;
+        if (persisted) {
+          setOpeningBalance(Number(persisted.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+          setOpeningBalanceDate(persisted.asOfDate);
+          setOpeningBalanceUpdatedAt(persisted.updatedAt);
+        }
       } catch (caughtError) {
         if (!cancelled) {
           setAccounts([]);
@@ -95,11 +117,49 @@ export default function CashFlowPage() {
     };
   }, []);
 
+  const parsedOpeningBalance = useMemo(
+    () => Number(openingBalance.replace(/\./g, "").replace(",", ".")),
+    [openingBalance],
+  );
+
   const summary = useMemo(() => {
-    const parsedOpeningBalance = Number(openingBalance.replace(/\./g, "").replace(",", "."));
     if (!Number.isFinite(parsedOpeningBalance)) return EMPTY_SUMMARY;
     return calculateCashFlow({ accounts, transactions, openingBalance: parsedOpeningBalance });
-  }, [accounts, transactions, openingBalance]);
+  }, [accounts, transactions, parsedOpeningBalance]);
+
+  async function saveOpeningBalance() {
+    if (!Number.isFinite(parsedOpeningBalance)) {
+      setOpeningBalanceFeedback("Informe um saldo inicial válido.");
+      return;
+    }
+    if (!openingBalanceDate) {
+      setOpeningBalanceFeedback("Informe a data-base do saldo inicial.");
+      return;
+    }
+
+    try {
+      setSavingOpeningBalance(true);
+      setOpeningBalanceFeedback(null);
+      const response = await fetch("/api/financeiro/fluxo-caixa", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: parsedOpeningBalance, asOfDate: openingBalanceDate }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.openingBalance) {
+        throw new Error(data?.message ?? "Não foi possível salvar o saldo inicial.");
+      }
+      const persisted = data.openingBalance as OpeningBalanceApi;
+      setOpeningBalance(Number(persisted.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      setOpeningBalanceDate(persisted.asOfDate);
+      setOpeningBalanceUpdatedAt(persisted.updatedAt);
+      setOpeningBalanceFeedback("Saldo inicial salvo e persistido.");
+    } catch (caughtError) {
+      setOpeningBalanceFeedback(caughtError instanceof Error ? caughtError.message : "Não foi possível salvar o saldo inicial.");
+    } finally {
+      setSavingOpeningBalance(false);
+    }
+  }
 
   const negativeDays = summary.buckets.filter((bucket) => bucket.projectedBalance < 0);
   const firstNegativeDay = negativeDays[0];
@@ -118,7 +178,7 @@ export default function CashFlowPage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">Financeiro</p>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0B2947]">Fluxo de Caixa</h2>
-                <p className="mt-1 text-sm text-[#64748B]">Projeção de entradas, saídas e saldo futuro.</p>
+                <p className="mt-1 text-sm text-[#64748B]">Projeção de entradas, saídas e saldo futuro com saldo inicial persistente.</p>
               </div>
               <button
                 type="button"
@@ -129,21 +189,44 @@ export default function CashFlowPage() {
               </button>
             </section>
 
-            <section className="grid grid-cols-1 gap-4 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <div className="max-w-xs">
-                <label htmlFor="opening-balance" className="mb-1.5 block text-xs font-semibold text-[#475569]">Saldo inicial</label>
-                <input
-                  id="opening-balance"
-                  name="openingBalance"
-                  value={openingBalance}
-                  onChange={(event) => setOpeningBalance(event.target.value)}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="0,00"
-                  className="h-11 w-full rounded-xl border border-[#E2E8F0] px-3 text-sm outline-none transition focus:border-[#154B7A] focus:ring-2 focus:ring-[#154B7A]/10"
-                />
+            <section className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_220px_auto] lg:items-end">
+                <div className="max-w-xs">
+                  <label htmlFor="opening-balance" className="mb-1.5 block text-xs font-semibold text-[#475569]">Saldo inicial</label>
+                  <input
+                    id="opening-balance"
+                    name="openingBalance"
+                    value={openingBalance}
+                    onChange={(event) => { setOpeningBalance(event.target.value); setOpeningBalanceFeedback(null); }}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="0,00"
+                    className="h-11 w-full rounded-xl border border-[#E2E8F0] px-3 text-sm outline-none transition focus:border-[#154B7A] focus:ring-2 focus:ring-[#154B7A]/10"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="opening-balance-date" className="mb-1.5 block text-xs font-semibold text-[#475569]">Data-base</label>
+                  <input
+                    id="opening-balance-date"
+                    type="date"
+                    value={openingBalanceDate}
+                    onChange={(event) => { setOpeningBalanceDate(event.target.value); setOpeningBalanceFeedback(null); }}
+                    className="h-11 w-full rounded-xl border border-[#E2E8F0] px-3 text-sm outline-none transition focus:border-[#154B7A] focus:ring-2 focus:ring-[#154B7A]/10"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={saveOpeningBalance}
+                  disabled={savingOpeningBalance || loading}
+                  className="h-11 rounded-xl bg-[#154B7A] px-5 text-sm font-semibold text-white transition hover:bg-[#103D65] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingOpeningBalance ? "Salvando..." : "Salvar saldo inicial"}
+                </button>
               </div>
-              <div className="sm:text-right"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94A3B8]">Horizonte</p><p className="mt-1 text-sm font-bold text-[#0B2947]">Próximos 30 dias</p></div>
+              <div className="mt-3 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <p className={openingBalanceFeedback?.includes("salvo") ? "font-semibold text-emerald-700" : "text-[#64748B]"}>{openingBalanceFeedback ?? "O saldo inicial é gravado por empresa e permanece após atualizar a página."}</p>
+                <div className="sm:text-right"><span className="font-semibold text-[#0B2947]">Horizonte: próximos 30 dias</span>{openingBalanceUpdatedAt ? <span className="ml-2 text-[#94A3B8]">· atualizado {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(openingBalanceUpdatedAt))}</span> : null}</div>
+              </div>
             </section>
 
             {loading ? (
