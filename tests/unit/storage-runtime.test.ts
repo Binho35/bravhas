@@ -14,11 +14,9 @@ function restoreEnv(name: string, value: string | undefined) {
 }
 
 test("production storage readiness fails closed when provider is missing", async () => {
-  const previousNodeEnv = process.env.NODE_ENV;
   const previousBravhasEnv = process.env.BRAVHAS_ENV;
   const previousProvider = process.env[PROVIDER_ENV];
 
-  process.env.NODE_ENV = "production";
   process.env.BRAVHAS_ENV = "PRODUCTION";
   delete process.env[PROVIDER_ENV];
 
@@ -32,18 +30,15 @@ test("production storage readiness fails closed when provider is missing", async
     assert.equal(health.productionSafe, false);
     assert.equal(health.code, "CONFIGURATION_INVALID");
   } finally {
-    restoreEnv("NODE_ENV", previousNodeEnv);
     restoreEnv("BRAVHAS_ENV", previousBravhasEnv);
     restoreEnv(PROVIDER_ENV, previousProvider);
   }
 });
 
 test("production storage readiness fails closed for an unknown provider", async () => {
-  const previousNodeEnv = process.env.NODE_ENV;
   const previousBravhasEnv = process.env.BRAVHAS_ENV;
   const previousProvider = process.env[PROVIDER_ENV];
 
-  process.env.NODE_ENV = "production";
   process.env.BRAVHAS_ENV = "PRODUCTION";
   process.env[PROVIDER_ENV] = "unsupported-provider";
 
@@ -57,7 +52,6 @@ test("production storage readiness fails closed for an unknown provider", async 
     assert.equal(health.productionSafe, false);
     assert.equal(health.code, "CONFIGURATION_INVALID");
   } finally {
-    restoreEnv("NODE_ENV", previousNodeEnv);
     restoreEnv("BRAVHAS_ENV", previousBravhasEnv);
     restoreEnv(PROVIDER_ENV, previousProvider);
   }
