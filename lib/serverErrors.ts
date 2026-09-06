@@ -39,6 +39,7 @@ export function serverErrorStatus(error: unknown) {
   if (code === "VALIDATION_FAILED") return 400;
   if (code === "TENANT_ACCESS_DENIED") return 404;
   if (code === "RESOURCE_NOT_FOUND") return 404;
+  if (code === "P2034") return 409;
   if (code === "STORAGE_UNAVAILABLE" || code === "CONFIGURATION_INVALID") return 503;
 
   if (!(error instanceof Error)) return 500;
