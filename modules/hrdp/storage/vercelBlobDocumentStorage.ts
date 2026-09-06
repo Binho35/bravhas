@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { del, get, head, put } from "@vercel/blob";
+import { BlobAccessError, BlobNotFoundError, del, get, head, put } from "@vercel/blob";
 
 import {
   StorageError,
@@ -80,13 +80,14 @@ function errorName(error: unknown) {
 }
 
 function configurationFailure(error: unknown) {
+  if (error instanceof BlobAccessError) return true;
   const name = errorName(error).toLowerCase();
-  return name.includes("access") || name.includes("token") || name.includes("store");
+  return name.includes("access") || name.includes("token") || name.includes("store") || name.includes("oidc");
 }
 
 function asStorageError(error: unknown, message: string) {
   if (error instanceof StorageError) return error;
-  if (errorName(error) === "BlobNotFoundError") {
+  if (error instanceof BlobNotFoundError) {
     return new StorageError("RESOURCE_NOT_FOUND", "Arquivo não encontrado.");
   }
   if (configurationFailure(error)) {
@@ -207,9 +208,9 @@ export function createVercelBlobDocumentStorage(
           productionSafe: true,
         };
       } catch (error) {
-        // A not-found response proves the authenticated store can be reached without
-        // creating a permanent healthcheck object.
-        if (errorName(error) === "BlobNotFoundError") {
+        // A typed not-found from the intentional probe proves authenticated reachability
+        // without creating a permanent healthcheck object.
+        if (error instanceof BlobNotFoundError) {
           return {
             ok: true,
             provider: "vercel-blob",

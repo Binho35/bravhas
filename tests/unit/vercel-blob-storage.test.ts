@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  BlobAccessError,
+  BlobNotFoundError,
+  BlobServiceNotAvailable,
+} from "@vercel/blob";
+
 import { StorageError } from "../../modules/hrdp/storage/documentStorage";
 import {
   createVercelBlobDocumentStorage,
@@ -42,9 +48,7 @@ function memoryOperations(): VercelBlobOperations {
       objects.delete(pathname);
     },
     async probe() {
-      const error = new Error("health object intentionally absent");
-      error.name = "BlobNotFoundError";
-      throw error;
+      throw new BlobNotFoundError();
     },
   };
 }
@@ -93,16 +97,60 @@ test("Vercel Blob private adapter satisfies save/read/delete, checksum, health a
   );
 });
 
-test("Vercel Blob health fails closed when provider authentication is unavailable", async () => {
+test("Vercel Blob health is ready when probe succeeds directly", async () => {
+  const operations = memoryOperations();
+  operations.probe = async () => {};
+  const health = await createVercelBlobDocumentStorage(operations).health();
+  assert.equal(health.ok, true);
+  assert.equal(health.provider, "vercel-blob");
+  assert.equal(health.persistent, true);
+  assert.equal(health.productionSafe, true);
+});
+
+test("Vercel Blob health treats typed BlobNotFoundError from intentional probe as reachability", async () => {
   const operations = memoryOperations();
   operations.probe = async () => {
-    const error = new Error("credential unavailable");
-    error.name = "BlobAccessError";
-    throw error;
+    throw new BlobNotFoundError();
+  };
+  const health = await createVercelBlobDocumentStorage(operations).health();
+  assert.equal(health.ok, true);
+  assert.equal(health.provider, "vercel-blob");
+  assert.equal(health.persistent, true);
+  assert.equal(health.productionSafe, true);
+});
+
+test("Vercel Blob health fails closed on typed authentication error", async () => {
+  const operations = memoryOperations();
+  operations.probe = async () => {
+    throw new BlobAccessError();
   };
   const health = await createVercelBlobDocumentStorage(operations).health();
   assert.equal(health.ok, false);
-  assert.equal(health.persistent, true);
-  assert.equal(health.productionSafe, true);
   assert.equal(health.code, "CONFIGURATION_INVALID");
+});
+
+test("Vercel Blob health reports real provider unavailability as STORAGE_UNAVAILABLE", async () => {
+  const operations = memoryOperations();
+  operations.probe = async () => {
+    throw new BlobServiceNotAvailable();
+  };
+  const health = await createVercelBlobDocumentStorage(operations).health();
+  assert.equal(health.ok, false);
+  assert.equal(health.code, "STORAGE_UNAVAILABLE");
+});
+
+test("Vercel Blob read maps typed BlobNotFoundError to RESOURCE_NOT_FOUND", async () => {
+  const operations = memoryOperations();
+  operations.getPrivate = async () => {
+    throw new BlobNotFoundError();
+  };
+  const storage = createVercelBlobDocumentStorage(operations);
+  await expectStorageError(
+    () => storage.read({
+      companyId: "tenant-alpha",
+      employeeId: "employee-1",
+      storageKey: "vercel-blob:tenant-alpha/employee-1/missing--document.pdf",
+    }),
+    "RESOURCE_NOT_FOUND",
+  );
 });
