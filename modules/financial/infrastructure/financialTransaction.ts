@@ -11,10 +11,12 @@ export type FinancialTransactionalRepositories = {
 export async function runFinancialTransaction<T>(
   operation: (repositories: FinancialTransactionalRepositories) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) =>
-    operation({
-      accountRepository: new PrismaFinancialAccountRepository(tx),
-      transactionRepository: new PrismaFinancialTransactionRepository(tx),
-    }),
+  return prisma.$transaction(
+    async (tx) =>
+      operation({
+        accountRepository: new PrismaFinancialAccountRepository(tx),
+        transactionRepository: new PrismaFinancialTransactionRepository(tx),
+      }),
+    { isolationLevel: "Serializable" },
   );
 }
