@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { closeE2eDb, dbExec, dbMany, dbOne } from "./helpers/db";
 import { loginAsAlphaOwner, logout } from "./helpers/auth";
@@ -20,6 +20,10 @@ type EmployeeRow = {
   emailCorporate: string | null;
 };
 type ObligationRow = { id: string; status: string; completedAt: Date | null };
+
+function toggleForm(page: Page, id: string) {
+  return page.locator("form").filter({ has: page.locator(`input[name="id"][value="${id}"]`) });
+}
 
 async function auditExists(entityType: string, entityId: string, action: string) {
   return dbOne<IdRow>(
@@ -120,7 +124,6 @@ test("functional golden path closes master data, employee admission, history, ob
     await departmentCreateForm.locator('input[name="name"]').fill(departmentOriginal);
     await departmentCreateForm.locator('input[name="code"]').fill(`E2E${Date.now().toString().slice(-5)}`);
     await departmentCreateForm.getByRole("button", { name: "Cadastrar departamento" }).click();
-    await expect(page.getByText(departmentOriginal, { exact: true })).toBeVisible();
 
     const department = await dbOne<MasterRow>(
       `SELECT id, name, active FROM "HrDepartment" WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
@@ -128,28 +131,30 @@ test("functional golden path closes master data, employee admission, history, ob
     );
     expect(department).toBeTruthy();
     expect(department?.active).toBe(true);
+    let departmentToggleForm = toggleForm(page, department!.id);
+    await expect(departmentToggleForm.locator("..").getByText(departmentOriginal, { exact: true })).toBeVisible();
+    await expect(departmentToggleForm.locator('input[name="active"]')).toHaveCount(0);
     expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_CREATED")).toBeTruthy();
 
-    let departmentToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) });
-    await expect(departmentToggleForm.locator('input[name="active"]')).toHaveCount(0);
     await departmentToggleForm.getByRole("button", { name: "Desativar" }).click();
-    departmentToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) });
+    departmentToggleForm = toggleForm(page, department!.id);
     await expect(departmentToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(false);
     expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_DISABLED")).toBeTruthy();
 
     await departmentToggleForm.getByRole("button", { name: "Ativar" }).click();
-    await expect(page.getByText(departmentOriginal, { exact: true })).toBeVisible();
+    departmentToggleForm = toggleForm(page, department!.id);
+    await expect(departmentToggleForm.locator("..").getByText(departmentOriginal, { exact: true })).toBeVisible();
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(true);
     expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_ENABLED")).toBeTruthy();
 
     await page.getByRole("link", { name: "Editar departamentos" }).click();
-    const departmentCard = page.locator("article").filter({ hasText: departmentOriginal });
+    const departmentCard = page.locator("article").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) });
     await departmentCard.locator('input[name="name"]').fill(departmentName);
     await departmentCard.getByRole("button", { name: "Salvar departamento" }).click();
-    await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
+    await expect(departmentCard.locator('input[name="name"]')).toHaveValue(departmentName);
     await page.reload();
-    await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
+    await expect(page.locator("article").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) }).locator('input[name="name"]')).toHaveValue(departmentName);
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.name).toBe(departmentName);
 
     await page.getByRole("link", { name: "Visão geral" }).click();
@@ -157,7 +162,6 @@ test("functional golden path closes master data, employee admission, history, ob
     await positionCreateForm.locator('input[name="name"]').fill(positionOriginal);
     await positionCreateForm.locator('select[name="departmentId"]').selectOption({ label: departmentName });
     await positionCreateForm.getByRole("button", { name: "Cadastrar cargo" }).click();
-    await expect(page.getByText(positionOriginal, { exact: true })).toBeVisible();
 
     const position = await dbOne<MasterRow>(
       `SELECT id, name, active FROM "HrPosition" WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
@@ -165,28 +169,30 @@ test("functional golden path closes master data, employee admission, history, ob
     );
     expect(position).toBeTruthy();
     expect(position?.active).toBe(true);
+    let positionToggleForm = toggleForm(page, position!.id);
+    await expect(positionToggleForm.locator("..").getByText(positionOriginal, { exact: true })).toBeVisible();
+    await expect(positionToggleForm.locator('input[name="active"]')).toHaveCount(0);
     expect(await auditExists("HrPosition", position!.id, "POSITION_CREATED")).toBeTruthy();
 
-    let positionToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) });
-    await expect(positionToggleForm.locator('input[name="active"]')).toHaveCount(0);
     await positionToggleForm.getByRole("button", { name: "Desativar" }).click();
-    positionToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) });
+    positionToggleForm = toggleForm(page, position!.id);
     await expect(positionToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(false);
     expect(await auditExists("HrPosition", position!.id, "POSITION_DISABLED")).toBeTruthy();
 
     await positionToggleForm.getByRole("button", { name: "Ativar" }).click();
-    await expect(page.getByText(positionOriginal, { exact: true })).toBeVisible();
+    positionToggleForm = toggleForm(page, position!.id);
+    await expect(positionToggleForm.locator("..").getByText(positionOriginal, { exact: true })).toBeVisible();
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(true);
     expect(await auditExists("HrPosition", position!.id, "POSITION_ENABLED")).toBeTruthy();
 
     await page.getByRole("link", { name: "Editar cargos" }).click();
-    const positionCard = page.locator("article").filter({ hasText: positionOriginal });
+    const positionCard = page.locator("article").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) });
     await positionCard.locator('input[name="name"]').fill(positionName);
     await positionCard.getByRole("button", { name: "Salvar cargo" }).click();
-    await expect(page.getByText(positionName, { exact: true })).toBeVisible();
+    await expect(positionCard.locator('input[name="name"]')).toHaveValue(positionName);
     await page.reload();
-    await expect(page.getByText(positionName, { exact: true })).toBeVisible();
+    await expect(page.locator("article").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) }).locator('input[name="name"]')).toHaveValue(positionName);
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.name).toBe(positionName);
 
     await page.goto("/rh/colaboradores/novo");

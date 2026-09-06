@@ -29,11 +29,11 @@ test("document metadata can be edited, reloaded and audited without changing sto
 
   try {
     await dbExec(
-      `INSERT INTO "HrEmployee" (id, "companyId", "branchId", "employeeNumber", "fullName", cpf, "hireDate", "employmentType", status, active) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, $8::"EmploymentType", $9::"EmployeeStatus", true)`,
+      `INSERT INTO "HrEmployee" (id, "companyId", "branchId", "employeeNumber", "fullName", cpf, "hireDate", "employmentType", status, active, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, $8::"EmploymentType", $9::"EmployeeStatus", true, now(), now())`,
       [employeeId, COMPANY_ID, "E2E-BRANCH-ALPHA", employeeNumber, unique("Colaborador Documento"), cpf, "2026-09-01T12:00:00.000Z", "CLT", "ACTIVE"],
     );
     await dbExec(
-      `INSERT INTO "HrEmployeeDocument" (id, "companyId", "employeeId", type, title, "storageKey", "issuedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp)`,
+      `INSERT INTO "HrEmployeeDocument" (id, "companyId", "employeeId", type, title, "storageKey", "issuedAt", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, now(), now())`,
       [documentId, COMPANY_ID, employeeId, "DOCUMENTO_PESSOAL", originalTitle, storageKey, "2026-09-01T12:00:00.000Z"],
     );
 
