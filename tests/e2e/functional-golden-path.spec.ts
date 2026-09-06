@@ -1,10 +1,104 @@
 import { expect, test } from "@playwright/test";
 
-import { prisma } from "../../lib/prisma";
+import { closeE2eDb, dbExec, dbMany, dbOne } from "./helpers/db";
 import { loginAsAlphaOwner, logout } from "./helpers/auth";
+
+const COMPANY_ID = "E2E-COMPANY-ALPHA";
 
 function unique(label: string) {
   return `E2E ${label} ${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+}
+
+type IdRow = { id: string };
+type MasterRow = { id: string; name: string; active: boolean };
+type EmployeeRow = {
+  id: string;
+  status: string;
+  fullName: string;
+  departmentId: string | null;
+  positionId: string | null;
+  emailCorporate: string | null;
+};
+type ObligationRow = { id: string; status: string; completedAt: Date | null };
+
+async function auditExists(entityType: string, entityId: string, action: string) {
+  return dbOne<IdRow>(
+    `SELECT id FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = $2 AND "entityId" = $3 AND action = $4 ORDER BY "createdAt" DESC LIMIT 1`,
+    [COMPANY_ID, entityType, entityId, action],
+  );
+}
+
+async function cleanupFunctionalFixture(input: {
+  cpf: string;
+  departmentNames: string[];
+  positionNames: string[];
+  obligationTitles: string[];
+}) {
+  const obligations = await dbMany<IdRow>(
+    `SELECT id FROM "Obligation" WHERE "companyId" = $1 AND title = ANY($2::text[])`,
+    [COMPANY_ID, input.obligationTitles],
+  );
+  const obligationIds = obligations.map((item) => item.id);
+  if (obligationIds.length) {
+    await dbExec(
+      `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'Obligation' AND "entityId" = ANY($2::text[])`,
+      [COMPANY_ID, obligationIds],
+    );
+    await dbExec(`DELETE FROM "Obligation" WHERE "companyId" = $1 AND id = ANY($2::text[])`, [COMPANY_ID, obligationIds]);
+  }
+
+  const employee = await dbOne<IdRow>(
+    `SELECT id FROM "HrEmployee" WHERE "companyId" = $1 AND cpf = $2 LIMIT 1`,
+    [COMPANY_ID, input.cpf],
+  );
+  if (employee) {
+    const documents = await dbMany<IdRow>(
+      `SELECT id FROM "HrEmployeeDocument" WHERE "companyId" = $1 AND "employeeId" = $2`,
+      [COMPANY_ID, employee.id],
+    );
+    const documentIds = documents.map((item) => item.id);
+    if (documentIds.length) {
+      await dbExec(
+        `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'HrEmployeeDocument' AND "entityId" = ANY($2::text[])`,
+        [COMPANY_ID, documentIds],
+      );
+      await dbExec(
+        `DELETE FROM "HrEmployeeDocument" WHERE "companyId" = $1 AND id = ANY($2::text[])`,
+        [COMPANY_ID, documentIds],
+      );
+    }
+    await dbExec(
+      `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'HrEmployee' AND "entityId" = $2`,
+      [COMPANY_ID, employee.id],
+    );
+    await dbExec(`DELETE FROM "HrEmployee" WHERE "companyId" = $1 AND id = $2`, [COMPANY_ID, employee.id]);
+  }
+
+  const positions = await dbMany<IdRow>(
+    `SELECT id FROM "HrPosition" WHERE "companyId" = $1 AND name = ANY($2::text[])`,
+    [COMPANY_ID, input.positionNames],
+  );
+  const positionIds = positions.map((item) => item.id);
+  if (positionIds.length) {
+    await dbExec(
+      `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'HrPosition' AND "entityId" = ANY($2::text[])`,
+      [COMPANY_ID, positionIds],
+    );
+    await dbExec(`DELETE FROM "HrPosition" WHERE "companyId" = $1 AND id = ANY($2::text[])`, [COMPANY_ID, positionIds]);
+  }
+
+  const departments = await dbMany<IdRow>(
+    `SELECT id FROM "HrDepartment" WHERE "companyId" = $1 AND name = ANY($2::text[])`,
+    [COMPANY_ID, input.departmentNames],
+  );
+  const departmentIds = departments.map((item) => item.id);
+  if (departmentIds.length) {
+    await dbExec(
+      `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'HrDepartment' AND "entityId" = ANY($2::text[])`,
+      [COMPANY_ID, departmentIds],
+    );
+    await dbExec(`DELETE FROM "HrDepartment" WHERE "companyId" = $1 AND id = ANY($2::text[])`, [COMPANY_ID, departmentIds]);
+  }
 }
 
 test("functional golden path closes master data, employee admission, history, obligations and agenda", async ({ page }) => {
@@ -18,139 +112,208 @@ test("functional golden path closes master data, employee admission, history, ob
   const obligationTitle = unique("Obrigação Agenda");
   const obligationEditedTitle = `${obligationTitle} Editada`;
 
-  await loginAsAlphaOwner(page);
+  try {
+    await loginAsAlphaOwner(page);
 
-  await page.goto("/rh/organizacao");
-  const departmentCreateForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Cadastrar departamento" }) });
-  await departmentCreateForm.locator('input[name="name"]').fill(departmentOriginal);
-  await departmentCreateForm.locator('input[name="code"]').fill(`E2E${Date.now().toString().slice(-5)}`);
-  await departmentCreateForm.getByRole("button", { name: "Cadastrar departamento" }).click();
-  await expect(page.getByText(departmentOriginal, { exact: true })).toBeVisible();
+    await page.goto("/rh/organizacao");
+    const departmentCreateForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Cadastrar departamento" }) });
+    await departmentCreateForm.locator('input[name="name"]').fill(departmentOriginal);
+    await departmentCreateForm.locator('input[name="code"]').fill(`E2E${Date.now().toString().slice(-5)}`);
+    await departmentCreateForm.getByRole("button", { name: "Cadastrar departamento" }).click();
+    await expect(page.getByText(departmentOriginal, { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Editar departamentos" }).click();
-  const departmentCard = page.locator("article").filter({ hasText: departmentOriginal });
-  await departmentCard.locator('input[name="name"]').fill(departmentName);
-  await departmentCard.getByRole("button", { name: "Salvar departamento" }).click();
-  await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
+    const department = await dbOne<MasterRow>(
+      `SELECT id, name, active FROM "HrDepartment" WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
+      [COMPANY_ID, departmentOriginal],
+    );
+    expect(department).toBeTruthy();
+    expect(department?.active).toBe(true);
+    expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_CREATED")).toBeTruthy();
 
-  await page.getByRole("link", { name: "Visão geral" }).click();
-  const positionCreateForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Cadastrar cargo" }) });
-  await positionCreateForm.locator('input[name="name"]').fill(positionOriginal);
-  await positionCreateForm.locator('select[name="departmentId"]').selectOption({ label: departmentName });
-  await positionCreateForm.getByRole("button", { name: "Cadastrar cargo" }).click();
-  await expect(page.getByText(positionOriginal, { exact: true })).toBeVisible();
+    let departmentToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) });
+    await expect(departmentToggleForm.locator('input[name="active"]')).toHaveCount(0);
+    await departmentToggleForm.getByRole("button", { name: "Desativar" }).click();
+    departmentToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) });
+    await expect(departmentToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(false);
+    expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_DISABLED")).toBeTruthy();
 
-  await page.getByRole("link", { name: "Editar cargos" }).click();
-  const positionCard = page.locator("article").filter({ hasText: positionOriginal });
-  await positionCard.locator('input[name="name"]').fill(positionName);
-  await positionCard.getByRole("button", { name: "Salvar cargo" }).click();
-  await expect(page.getByText(positionName, { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByText(positionName, { exact: true })).toBeVisible();
+    await departmentToggleForm.getByRole("button", { name: "Ativar" }).click();
+    await expect(page.getByText(departmentOriginal, { exact: true })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(true);
+    expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_ENABLED")).toBeTruthy();
 
-  await page.goto("/rh/colaboradores/novo");
-  await page.getByLabel("Nome completo *").fill(employeeName);
-  await page.getByLabel("CPF *").fill(cpf);
-  await page.getByLabel("Data de admissão *").fill("2026-09-15");
-  await page.getByLabel("Tipo de contrato *").selectOption("CLT");
-  await page.getByLabel("Departamento").selectOption({ label: departmentName });
-  await page.getByLabel("Cargo").selectOption({ label: positionName });
-  await page.getByRole("button", { name: /Salvar e continuar para documentos/ }).click();
-  await expect(page).toHaveURL(/\/rh\/colaboradores\/[^/]+\/documentos$/);
+    await page.getByRole("link", { name: "Editar departamentos" }).click();
+    const departmentCard = page.locator("article").filter({ hasText: departmentOriginal });
+    await departmentCard.locator('input[name="name"]').fill(departmentName);
+    await departmentCard.getByRole("button", { name: "Salvar departamento" }).click();
+    await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(departmentName, { exact: true })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.name).toBe(departmentName);
 
-  const employeeId = page.url().match(/\/rh\/colaboradores\/([^/]+)\/documentos$/)?.[1];
-  expect(employeeId).toBeTruthy();
-  const createdEmployee = await prisma.hrEmployee.findFirst({ where: { id: employeeId!, companyId: "E2E-COMPANY-ALPHA" } });
-  expect(createdEmployee?.status).toBe("PRE_ADMISSION");
-  expect(createdEmployee?.fullName).toBe(employeeName);
-  expect(createdEmployee?.departmentId).toBeTruthy();
-  expect(createdEmployee?.positionId).toBeTruthy();
+    await page.getByRole("link", { name: "Visão geral" }).click();
+    const positionCreateForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Cadastrar cargo" }) });
+    await positionCreateForm.locator('input[name="name"]').fill(positionOriginal);
+    await positionCreateForm.locator('select[name="departmentId"]').selectOption({ label: departmentName });
+    await positionCreateForm.getByRole("button", { name: "Cadastrar cargo" }).click();
+    await expect(page.getByText(positionOriginal, { exact: true })).toBeVisible();
 
-  await page.locator('select[name="type"]').selectOption("DOCUMENTO_PESSOAL");
-  await page.locator('input[name="title"]').fill("Documento funcional E2E");
-  await page.locator('input[name="externalReference"]').fill(`external:e2e:${employeeId}`);
-  await page.getByRole("button", { name: "Salvar documento" }).click();
-  await expect(page.getByText("Documento funcional E2E", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Conferir" }).click();
-  await expect(page.getByText("Conferido", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Ir para concluir admissão/ })).toBeVisible();
+    const position = await dbOne<MasterRow>(
+      `SELECT id, name, active FROM "HrPosition" WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
+      [COMPANY_ID, positionOriginal],
+    );
+    expect(position).toBeTruthy();
+    expect(position?.active).toBe(true);
+    expect(await auditExists("HrPosition", position!.id, "POSITION_CREATED")).toBeTruthy();
 
-  await page.getByRole("link", { name: /Ir para concluir admissão/ }).click();
-  await expect(page.getByText(employeeName, { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Concluir admissão/ }).click();
-  await expect(page.getByText(employeeName, { exact: true })).toHaveCount(0);
+    let positionToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) });
+    await expect(positionToggleForm.locator('input[name="active"]')).toHaveCount(0);
+    await positionToggleForm.getByRole("button", { name: "Desativar" }).click();
+    positionToggleForm = page.locator("form").filter({ has: page.locator(`input[name="id"][value="${position!.id}"]`) });
+    await expect(positionToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(false);
+    expect(await auditExists("HrPosition", position!.id, "POSITION_DISABLED")).toBeTruthy();
 
-  const activeEmployee = await prisma.hrEmployee.findFirst({ where: { id: employeeId!, companyId: "E2E-COMPANY-ALPHA" } });
-  expect(activeEmployee?.status).toBe("ACTIVE");
-  expect(await prisma.hrAuditEvent.findFirst({ where: { companyId: "E2E-COMPANY-ALPHA", entityType: "HrEmployee", entityId: employeeId!, action: "EMPLOYEE_ADMISSION_COMPLETED" } })).toBeTruthy();
+    await positionToggleForm.getByRole("button", { name: "Ativar" }).click();
+    await expect(page.getByText(positionOriginal, { exact: true })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(true);
+    expect(await auditExists("HrPosition", position!.id, "POSITION_ENABLED")).toBeTruthy();
 
-  await page.goto(`/rh/colaboradores/${employeeId}`);
-  await page.getByRole("link", { name: "Editar cadastro" }).click();
-  await page.getByLabel("Nome completo").fill(employeeEditedName);
-  await page.getByLabel("E-mail corporativo").fill("functional.e2e@example.test");
-  await page.getByRole("button", { name: "Salvar alterações" }).click();
-  await expect(page).toHaveURL(new RegExp(`/rh/colaboradores/${employeeId}$`));
-  await expect(page.getByRole("heading", { name: employeeEditedName })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("heading", { name: employeeEditedName })).toBeVisible();
-  expect((await prisma.hrEmployee.findUnique({ where: { id: employeeId! } }))?.emailCorporate).toBe("functional.e2e@example.test");
+    await page.getByRole("link", { name: "Editar cargos" }).click();
+    const positionCard = page.locator("article").filter({ hasText: positionOriginal });
+    await positionCard.locator('input[name="name"]').fill(positionName);
+    await positionCard.getByRole("button", { name: "Salvar cargo" }).click();
+    await expect(page.getByText(positionName, { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(positionName, { exact: true })).toBeVisible();
+    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.name).toBe(positionName);
 
-  await page.getByRole("link", { name: "Histórico auditável" }).click();
-  await expect(page.getByText("Cadastro criado")).toBeVisible();
-  await expect(page.getByText("Admissão concluída")).toBeVisible();
-  await expect(page.getByText("Cadastro atualizado")).toBeVisible();
-  await expect(page.getByText("Documento conferido")).toBeVisible();
+    await page.goto("/rh/colaboradores/novo");
+    await page.getByLabel("Nome completo *").fill(employeeName);
+    await page.getByLabel("CPF *").fill(cpf);
+    await page.getByLabel("Data de admissão *").fill("2026-09-15");
+    await page.getByLabel("Tipo de contrato *").selectOption("CLT");
+    await page.getByLabel("Departamento").selectOption({ label: departmentName });
+    await page.getByLabel("Cargo").selectOption({ label: positionName });
+    await page.getByRole("button", { name: /Salvar e continuar para documentos/ }).click();
+    await expect(page).toHaveURL(/\/rh\/colaboradores\/[^/]+\/documentos$/);
 
-  await page.goto("/obrigacoes/nova");
-  await page.locator("input").nth(0).fill(obligationTitle);
-  await page.locator("select").nth(0).selectOption("ADMINISTRATIVE");
-  await page.locator("select").nth(1).selectOption("HIGH");
-  await page.locator("input").nth(1).fill("E2E Alpha Owner");
-  await page.locator("input").nth(2).fill("2026-09-20");
-  await page.getByRole("button", { name: "Salvar obrigação" }).click();
-  await expect(page).toHaveURL(/\/obrigacoes$/);
+    const employeeId = page.url().match(/\/rh\/colaboradores\/([^/]+)\/documentos$/)?.[1];
+    expect(employeeId).toBeTruthy();
+    const createdEmployee = await dbOne<EmployeeRow>(
+      `SELECT id, status, "fullName", "departmentId", "positionId", "emailCorporate" FROM "HrEmployee" WHERE id = $1 AND "companyId" = $2`,
+      [employeeId!, COMPANY_ID],
+    );
+    expect(createdEmployee?.status).toBe("PRE_ADMISSION");
+    expect(createdEmployee?.fullName).toBe(employeeName);
+    expect(createdEmployee?.departmentId).toBe(department!.id);
+    expect(createdEmployee?.positionId).toBe(position!.id);
 
-  const obligation = await prisma.obligation.findFirst({ where: { companyId: "E2E-COMPANY-ALPHA", title: obligationTitle } });
-  expect(obligation).toBeTruthy();
-  expect(await prisma.hrAuditEvent.findFirst({ where: { companyId: "E2E-COMPANY-ALPHA", entityType: "Obligation", entityId: obligation!.id, action: "OBLIGATION_CREATED" } })).toBeTruthy();
+    await page.locator('select[name="type"]').selectOption("DOCUMENTO_PESSOAL");
+    await page.locator('input[name="title"]').fill("Documento funcional E2E");
+    await page.locator('input[name="externalReference"]').fill(`external:e2e:${employeeId}`);
+    await page.getByRole("button", { name: "Salvar documento" }).click();
+    await expect(page.getByText("Documento funcional E2E", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Conferir" }).click();
+    await expect(page.getByText("Conferido", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Ir para concluir admissão/ })).toBeVisible();
 
-  await page.goto("/agenda");
-  await expect(page.getByText(obligationTitle, { exact: true })).toBeVisible();
-  await page.getByText(obligationTitle, { exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/obrigacoes/${obligation!.id}$`));
+    await page.getByRole("link", { name: /Ir para concluir admissão/ }).click();
+    await expect(page.getByText(employeeName, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Concluir admissão/ }).click();
+    await expect(page.getByText(employeeName, { exact: true })).toHaveCount(0);
 
-  await page.locator("input").nth(0).fill(obligationEditedTitle);
-  await page.locator("select").nth(2).selectOption("IN_PROGRESS");
-  await page.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(page.getByText("Alterações salvas.")).toBeVisible();
-  await page.reload();
-  await expect(page.locator("input").nth(0)).toHaveValue(obligationEditedTitle);
-  expect((await prisma.obligation.findUnique({ where: { id: obligation!.id } }))?.status).toBe("IN_PROGRESS");
+    const activeEmployee = await dbOne<EmployeeRow>(
+      `SELECT id, status, "fullName", "departmentId", "positionId", "emailCorporate" FROM "HrEmployee" WHERE id = $1 AND "companyId" = $2`,
+      [employeeId!, COMPANY_ID],
+    );
+    expect(activeEmployee?.status).toBe("ACTIVE");
+    expect(await auditExists("HrEmployee", employeeId!, "EMPLOYEE_ADMISSION_COMPLETED")).toBeTruthy();
 
-  await page.goto("/agenda");
-  await expect(page.getByText(obligationEditedTitle, { exact: true })).toBeVisible();
-  await page.getByText(obligationEditedTitle, { exact: true }).click();
-  await page.getByRole("button", { name: "Concluir", exact: true }).click();
-  await expect(page).toHaveURL(/\/obrigacoes$/);
-  const completed = await prisma.obligation.findUnique({ where: { id: obligation!.id } });
-  expect(completed?.status).toBe("COMPLETED");
-  expect(completed?.completedAt).toBeTruthy();
+    await page.goto(`/rh/colaboradores/${employeeId}`);
+    await page.getByRole("link", { name: "Editar cadastro" }).click();
+    await page.getByLabel("Nome completo").fill(employeeEditedName);
+    await page.getByLabel("E-mail corporativo").fill("functional.e2e@example.test");
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page).toHaveURL(new RegExp(`/rh/colaboradores/${employeeId}$`));
+    await expect(page.getByRole("heading", { name: employeeEditedName })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: employeeEditedName })).toBeVisible();
+    expect((await dbOne<EmployeeRow>(
+      `SELECT id, status, "fullName", "departmentId", "positionId", "emailCorporate" FROM "HrEmployee" WHERE id = $1 AND "companyId" = $2`,
+      [employeeId!, COMPANY_ID],
+    ))?.emailCorporate).toBe("functional.e2e@example.test");
 
-  await page.goto("/agenda");
-  await expect(page.getByText(obligationEditedTitle, { exact: true })).toBeVisible();
-  await page.goto(`/obrigacoes/${obligation!.id}/historico`);
-  await expect(page.getByText("Obrigação criada")).toBeVisible();
-  await expect(page.getByText("Status alterado")).toBeVisible();
-  await expect(page.getByText("Obrigação concluída")).toBeVisible();
+    await page.getByRole("link", { name: "Histórico auditável" }).click();
+    await expect(page.getByText("Cadastro criado")).toBeVisible();
+    await expect(page.getByText("Admissão concluída")).toBeVisible();
+    await expect(page.getByText("Cadastro atualizado")).toBeVisible();
+    await expect(page.getByText("Documento conferido")).toBeVisible();
 
-  const foreignEdit = await page.goto("/rh/colaboradores/E2E-EMP-BETA-FOREIGN/editar");
-  expect(foreignEdit?.status()).toBe(404);
+    await page.goto("/obrigacoes/nova");
+    await page.locator("input").nth(0).fill(obligationTitle);
+    await page.locator("select").nth(0).selectOption("ADMINISTRATIVE");
+    await page.locator("select").nth(1).selectOption("HIGH");
+    await page.locator("input").nth(1).fill("E2E Alpha Owner");
+    await page.locator("input").nth(2).fill("2026-09-20");
+    await page.getByRole("button", { name: "Salvar obrigação" }).click();
+    await expect(page).toHaveURL(/\/obrigacoes$/);
 
-  await page.goto("/obrigacoes/nova");
-  await page.getByRole("button", { name: "Salvar obrigação" }).click();
-  await expect(page.getByText("Informe o título da obrigação.")).toBeVisible();
+    const obligation = await dbOne<ObligationRow>(
+      `SELECT id, status, "completedAt" FROM "Obligation" WHERE "companyId" = $1 AND title = $2 LIMIT 1`,
+      [COMPANY_ID, obligationTitle],
+    );
+    expect(obligation).toBeTruthy();
+    expect(await auditExists("Obligation", obligation!.id, "OBLIGATION_CREATED")).toBeTruthy();
 
-  await logout(page);
+    await page.goto("/agenda");
+    await expect(page.getByText(obligationTitle, { exact: true })).toBeVisible();
+    await page.getByText(obligationTitle, { exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/obrigacoes/${obligation!.id}$`));
+
+    await page.locator("input").nth(0).fill(obligationEditedTitle);
+    await page.locator("select").nth(2).selectOption("IN_PROGRESS");
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByText("Alterações salvas.")).toBeVisible();
+    await page.reload();
+    await expect(page.locator("input").nth(0)).toHaveValue(obligationEditedTitle);
+    expect((await dbOne<ObligationRow>(`SELECT id, status, "completedAt" FROM "Obligation" WHERE id = $1 AND "companyId" = $2`, [obligation!.id, COMPANY_ID]))?.status).toBe("IN_PROGRESS");
+
+    await page.goto("/agenda");
+    await expect(page.getByText(obligationEditedTitle, { exact: true })).toBeVisible();
+    await page.getByText(obligationEditedTitle, { exact: true }).click();
+    await page.getByRole("button", { name: "Concluir", exact: true }).click();
+    await expect(page).toHaveURL(/\/obrigacoes$/);
+    const completed = await dbOne<ObligationRow>(
+      `SELECT id, status, "completedAt" FROM "Obligation" WHERE id = $1 AND "companyId" = $2`,
+      [obligation!.id, COMPANY_ID],
+    );
+    expect(completed?.status).toBe("COMPLETED");
+    expect(completed?.completedAt).toBeTruthy();
+
+    await page.goto("/agenda");
+    await expect(page.getByText(obligationEditedTitle, { exact: true })).toBeVisible();
+    await page.goto(`/obrigacoes/${obligation!.id}/historico`);
+    await expect(page.getByText("Obrigação criada")).toBeVisible();
+    await expect(page.getByText("Status alterado")).toBeVisible();
+    await expect(page.getByText("Obrigação concluída")).toBeVisible();
+
+    const foreignEdit = await page.goto("/rh/colaboradores/E2E-EMP-BETA-FOREIGN/editar");
+    expect(foreignEdit?.status()).toBe(404);
+
+    await page.goto("/obrigacoes/nova");
+    await page.getByRole("button", { name: "Salvar obrigação" }).click();
+    await expect(page.getByText("Informe o título da obrigação.")).toBeVisible();
+
+    await logout(page);
+  } finally {
+    await cleanupFunctionalFixture({
+      cpf,
+      departmentNames: [departmentOriginal, departmentName],
+      positionNames: [positionOriginal, positionName],
+      obligationTitles: [obligationTitle, obligationEditedTitle],
+    });
+    await closeE2eDb();
+  }
 });
