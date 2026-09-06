@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 
-export const DOCUMENT_STORAGE_MAX_BYTES = 5 * 1024 * 1024;
+// Vercel server uploads are limited to 4.5 MB including request overhead.
+// Keep the application contract at 4 MB while uploads remain server-side.
+export const DOCUMENT_STORAGE_MAX_BYTES = 4 * 1024 * 1024;
 
 export const DOCUMENT_STORAGE_ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -86,7 +88,7 @@ function validationError(message: string) {
 
 export function assertDocumentUploadPolicy(file: File) {
   if (file.size <= 0) throw validationError("Selecione um arquivo para upload.");
-  if (file.size > DOCUMENT_STORAGE_MAX_BYTES) throw validationError("O arquivo deve ter no máximo 5 MB.");
+  if (file.size > DOCUMENT_STORAGE_MAX_BYTES) throw validationError("O arquivo deve ter no máximo 4 MB.");
   if (!DOCUMENT_STORAGE_ALLOWED_MIME_TYPES.includes(file.type as DocumentStorageMimeType)) {
     throw validationError("Formato não permitido. Envie PDF, JPG, PNG ou WEBP.");
   }

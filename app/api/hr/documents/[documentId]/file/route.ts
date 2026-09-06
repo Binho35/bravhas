@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logServerFailure, serverErrorStatus } from "@/lib/serverErrors";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { StorageError } from "@/modules/hrdp/storage/documentStorage";
-import { isLocalDocumentStorageKey, localDocumentStorage } from "@/modules/hrdp/storage/localDocumentStorage";
+import { documentStorageForKey } from "@/modules/hrdp/storage/storageRuntime";
 
 export async function GET(
   _request: Request,
@@ -19,11 +19,12 @@ export async function GET(
       select: { id: true, employeeId: true, storageKey: true },
     });
 
-    if (!document?.storageKey || !isLocalDocumentStorageKey(document.storageKey)) {
+    const storage = documentStorageForKey(document?.storageKey);
+    if (!document?.storageKey || !storage) {
       return NextResponse.json({ success: false, message: "Arquivo não encontrado." }, { status: 404 });
     }
 
-    const file = await localDocumentStorage.read({
+    const file = await storage.read({
       companyId: actor.companyId,
       employeeId: document.employeeId,
       storageKey: document.storageKey,
@@ -47,8 +48,14 @@ export async function GET(
       error instanceof StorageError && (error.code === "RESOURCE_NOT_FOUND" || error.code === "TENANT_ACCESS_DENIED")
         ? 404
         : serverErrorStatus(error);
+    const message =
+      status === 401 || status === 403
+        ? "Acesso não autorizado."
+        : status === 503
+          ? "Armazenamento documental indisponível."
+          : "Arquivo não encontrado.";
     return NextResponse.json(
-      { success: false, message: status === 401 || status === 403 ? "Acesso não autorizado." : "Arquivo não encontrado." },
+      { success: false, message },
       { status: status === 500 ? 404 : status },
     );
   }

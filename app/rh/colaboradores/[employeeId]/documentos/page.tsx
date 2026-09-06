@@ -7,8 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { logServerFailure } from "@/lib/serverErrors";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
-import type { StoredDocument } from "@/modules/hrdp/storage/documentStorage";
-import { isLocalDocumentStorageKey, localDocumentStorage } from "@/modules/hrdp/storage/localDocumentStorage";
+import type { DocumentStorage, StoredDocument } from "@/modules/hrdp/storage/documentStorage";
+import { getDocumentStorage, isManagedDocumentStorageKey } from "@/modules/hrdp/storage/storageRuntime";
 
 const DOCUMENT_TYPES = new Set([
   "CURRICULO",
@@ -43,7 +43,8 @@ function externalDocumentReference(formData: FormData) {
   if (reference.length > 2048 || /[\u0000-\u001f\u007f]/.test(reference)) {
     throw new Error("Referência externa inválida.");
   }
-  if (reference.toLowerCase().startsWith("local:")) {
+  const normalized = reference.toLowerCase();
+  if (normalized.startsWith("local:") || normalized.startsWith("vercel-blob:")) {
     throw new Error("Referência externa usa prefixo reservado.");
   }
   return reference;
@@ -69,10 +70,12 @@ async function createDocument(employeeId: string, formData: FormData) {
   const fileValue = formData.get("file");
   const externalReference = externalDocumentReference(formData);
   let storedFile: StoredDocument | null = null;
+  let storage: DocumentStorage | null = null;
   let storageKey = externalReference;
 
   if (fileValue instanceof File && fileValue.size > 0) {
-    storedFile = await localDocumentStorage.save({
+    storage = getDocumentStorage();
+    storedFile = await storage.save({
       companyId: actor.companyId,
       employeeId,
       file: fileValue,
@@ -125,9 +128,9 @@ async function createDocument(employeeId: string, formData: FormData) {
       );
     });
   } catch (error) {
-    if (storedFile) {
+    if (storedFile && storage) {
       try {
-        await localDocumentStorage.delete({
+        await storage.delete({
           companyId: actor.companyId,
           employeeId,
           storageKey: storedFile.storageKey,
@@ -253,7 +256,7 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
               <label className="block rounded-2xl border border-dashed border-blue-300 bg-blue-50/60 p-4">
                 <span className="flex items-center gap-2 text-sm font-semibold text-[#154b7a]"><Upload className="h-4 w-4" />Selecionar arquivo</span>
                 <input name="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="mt-3 block w-full text-xs text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-[#0b2947] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white" />
-                <span className="mt-2 block text-[11px] text-slate-500">PDF, JPG, PNG ou WEBP · máximo 5 MB. O conteúdo é validado no servidor antes da persistência.</span>
+                <span className="mt-2 block text-[11px] text-slate-500">PDF, JPG, PNG ou WEBP · máximo 4 MB. O conteúdo é validado no servidor antes da persistência.</span>
               </label>
               <input name="externalReference" maxLength={2048} placeholder="Ou informe referência externa / URL interna" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm" />
               <div className="grid grid-cols-2 gap-3"><label className="text-xs text-slate-500">Emissão<input name="issuedAt" type="date" className="mt-1 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm" /></label><label className="text-xs text-slate-500">Validade<input name="expiresAt" type="date" className="mt-1 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm" /></label></div>
@@ -265,8 +268,8 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
           <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 p-6"><Files className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold text-[#0b2947]">Arquivo funcional</h2><p className="text-xs text-slate-500">Histórico documental do colaborador.</p></div></div>
             {employee.documents.length === 0 ? <div className="p-14 text-center text-sm text-slate-500">Nenhum documento cadastrado. Anexe ao menos um documento para avançar.</div> : <div className="divide-y divide-slate-100">{employee.documents.map((item) => {
-              const localFile = isLocalDocumentStorageKey(item.storageKey);
-              return <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>{item.type}</span>{localFile ? <a href={`/api/hr/documents/${item.id}/file`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#154b7a] hover:underline"><ExternalLink className="h-3.5 w-3.5" />Abrir arquivo</a> : item.storageKey ? <span className="max-w-[250px] truncate">{item.storageKey}</span> : <span>Sem arquivo</span>}</div></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>;
+              const managedFile = isManagedDocumentStorageKey(item.storageKey);
+              return <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>{item.type}</span>{managedFile ? <a href={`/api/hr/documents/${item.id}/file`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#154b7a] hover:underline"><ExternalLink className="h-3.5 w-3.5" />Abrir arquivo</a> : item.storageKey ? <span className="max-w-[250px] truncate">{item.storageKey}</span> : <span>Sem arquivo</span>}</div></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>;
             })}</div>}
           </article>
         </section>
