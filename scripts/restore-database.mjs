@@ -30,6 +30,65 @@ function connection() {
   };
 }
 
+function postgresArgs(db) {
+  return [
+    `--host=${db.host}`,
+    `--port=${db.port}`,
+    `--username=${db.user}`,
+    `--dbname=${db.database}`,
+  ];
+}
+
+function psqlJson(db, sql, errorCode) {
+  const result = spawnSync("psql", [...postgresArgs(db), "--tuples-only", "--no-align", "--command", sql], {
+    encoding: "utf8",
+    env: { ...process.env, PGPASSWORD: db.password },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0 || !result.stdout.trim()) throw new Error(errorCode);
+  return JSON.parse(result.stdout.trim());
+}
+
+function readRowCounts(db) {
+  return psqlJson(
+    db,
+    `SELECT json_build_object(
+      'Company', (SELECT COUNT(*)::int FROM "Company"),
+      'User', (SELECT COUNT(*)::int FROM "User"),
+      'HrEmployee', (SELECT COUNT(*)::int FROM "HrEmployee"),
+      'HrEmployeeDocument', (SELECT COUNT(*)::int FROM "HrEmployeeDocument"),
+      'FinancialAccount', (SELECT COUNT(*)::int FROM "FinancialAccount"),
+      'FinancialTransaction', (SELECT COUNT(*)::int FROM "FinancialTransaction"),
+      'Obligation', (SELECT COUNT(*)::int FROM "Obligation")
+    );`,
+    "RESTORE_ROW_COUNT_FAILED",
+  );
+}
+
+function readTenantIntegrity(db) {
+  return psqlJson(
+    db,
+    `SELECT json_build_object(
+      'documentCompanyMismatch', (
+        SELECT COUNT(*)::int FROM "HrEmployeeDocument" d
+        JOIN "HrEmployee" e ON e.id = d."employeeId"
+        WHERE d."companyId" <> e."companyId"
+      ),
+      'financialBranchMismatch', (
+        SELECT COUNT(*)::int FROM "FinancialAccount" a
+        JOIN "Branch" b ON b.id = a."branchId"
+        WHERE a."companyId" <> b."companyId"
+      ),
+      'obligationResponsibleMismatch', (
+        SELECT COUNT(*)::int FROM "Obligation" o
+        JOIN "User" u ON u.id = o."responsibleUserId"
+        WHERE o."companyId" <> u."companyId"
+      )
+    );`,
+    "RESTORE_TENANT_INTEGRITY_CHECK_FAILED",
+  );
+}
+
 function sha256(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
@@ -65,7 +124,12 @@ if (!existsSync(artifactPath)) throw new Error("RESTORE_ARTIFACT_NOT_FOUND");
 if (!existsSync(manifestPath)) throw new Error("RESTORE_MANIFEST_NOT_FOUND");
 
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-if (manifest.checksumAlgorithm !== "sha256" || typeof manifest.checksumSha256 !== "string") {
+if (
+  manifest.checksumAlgorithm !== "sha256" ||
+  typeof manifest.checksumSha256 !== "string" ||
+  typeof manifest.rowCounts !== "object" ||
+  manifest.rowCounts === null
+) {
   throw new Error("RESTORE_MANIFEST_INVALID");
 }
 const actualChecksum = sha256(artifactPath);
@@ -91,10 +155,7 @@ const result = spawnSync(
     "--if-exists",
     "--no-owner",
     "--no-acl",
-    `--host=${db.host}`,
-    `--port=${db.port}`,
-    `--username=${db.user}`,
-    `--dbname=${db.database}`,
+    ...postgresArgs(db),
     artifactPath,
   ],
   { stdio: "inherit", env: { ...process.env, PGPASSWORD: db.password } },
@@ -109,6 +170,18 @@ const migrationStatus = spawnSync("npx", ["prisma", "migrate", "status"], {
 if (migrationStatus.error) throw migrationStatus.error;
 if (migrationStatus.status !== 0) process.exit(migrationStatus.status ?? 1);
 
+const restoredCounts = readRowCounts(db);
+if (JSON.stringify(restoredCounts) !== JSON.stringify(manifest.rowCounts)) {
+  throw new Error("RESTORE_ROW_COUNTS_MISMATCH");
+}
+
+const tenantIntegrity = readTenantIntegrity(db);
+if (Object.values(tenantIntegrity).some((value) => value !== 0)) {
+  throw new Error("RESTORE_TENANT_DATA_INVALID");
+}
+
 console.log("RESTORE_COMPLETED=PASS");
 console.log("MIGRATION_STATUS=PASS");
-console.log("POST_RESTORE_APPLICATION_VALIDATION=REQUIRED");
+console.log("ROW_COUNTS_VALID=PASS");
+console.log("TENANT_DATA_VALID=PASS");
+console.log("APPLICATION_SMOKE_PASS=DEFERRED_RUNTIME_VALIDATION");
