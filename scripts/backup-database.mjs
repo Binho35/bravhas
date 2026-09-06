@@ -28,8 +28,36 @@ function connection() {
   };
 }
 
+function postgresArgs(db) {
+  return [
+    `--host=${db.host}`,
+    `--port=${db.port}`,
+    `--username=${db.user}`,
+    `--dbname=${db.database}`,
+  ];
+}
+
 function checksum(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+
+function readRowCounts(db) {
+  const sql = `SELECT json_build_object(
+    'Company', (SELECT COUNT(*)::int FROM "Company"),
+    'User', (SELECT COUNT(*)::int FROM "User"),
+    'HrEmployee', (SELECT COUNT(*)::int FROM "HrEmployee"),
+    'HrEmployeeDocument', (SELECT COUNT(*)::int FROM "HrEmployeeDocument"),
+    'FinancialAccount', (SELECT COUNT(*)::int FROM "FinancialAccount"),
+    'FinancialTransaction', (SELECT COUNT(*)::int FROM "FinancialTransaction"),
+    'Obligation', (SELECT COUNT(*)::int FROM "Obligation")
+  );`;
+  const result = spawnSync("psql", [...postgresArgs(db), "--tuples-only", "--no-align", "--command", sql], {
+    encoding: "utf8",
+    env: { ...process.env, PGPASSWORD: db.password },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0 || !result.stdout.trim()) throw new Error("BACKUP_ROW_COUNT_FAILED");
+  return JSON.parse(result.stdout.trim());
 }
 
 const execute = process.argv.includes("--execute");
@@ -54,21 +82,21 @@ if (!execute) {
 }
 
 mkdirSync(outputDir, { recursive: true });
-const args = [
-  "--format=custom",
-  "--no-owner",
-  "--no-acl",
-  `--host=${db.host}`,
-  `--port=${db.port}`,
-  `--username=${db.user}`,
-  `--dbname=${db.database}`,
-  `--file=${artifactPath}`,
-];
-
-const result = spawnSync("pg_dump", args, {
-  stdio: "inherit",
-  env: { ...process.env, PGPASSWORD: db.password },
-});
+const rowCounts = readRowCounts(db);
+const result = spawnSync(
+  "pg_dump",
+  [
+    "--format=custom",
+    "--no-owner",
+    "--no-acl",
+    ...postgresArgs(db),
+    `--file=${artifactPath}`,
+  ],
+  {
+    stdio: "inherit",
+    env: { ...process.env, PGPASSWORD: db.password },
+  },
+);
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 if (!existsSync(artifactPath)) throw new Error("BACKUP_ARTIFACT_NOT_CREATED");
@@ -82,9 +110,11 @@ const manifest = {
   databaseIdentifierHash,
   checksumAlgorithm: "sha256",
   checksumSha256: checksum(artifactPath),
+  rowCounts,
 };
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
 
 console.log("BACKUP_CREATED=PASS");
 console.log("CHECKSUM_VALID=PASS");
+console.log("ROW_COUNTS_CAPTURED=PASS");
 console.log(`MANIFEST=${path.basename(manifestPath)}`);
