@@ -2,78 +2,96 @@
 
 ## Estado
 
-**PARCIAL / DOCUMENTADO.** O repositório possui `/api/health` e `/api/readiness`; nenhum serviço pago de monitoramento foi configurado neste ciclo.
+**PARCIAL / IMPLEMENTADO INTERNAMENTE.** O repositório possui liveness, readiness, request ID e logging operacional estruturado. Nenhum serviço externo/pago de monitoramento ou alerta foi configurado.
 
-## Sinais mínimos
-
-### Health
+## Liveness
 
 `GET /api/health`
 
-Objetivo: provar que a aplicação está viva e que o PostgreSQL responde.
+Objetivo: provar apenas que o processo HTTP está vivo.
 
-- 200: aplicação e banco respondem;
-- 503: banco indisponível/degradação;
-- mensagens de erro de banco devem permanecer sanitizadas fora de desenvolvimento.
+- responde 200 quando a aplicação atende a requisição;
+- não consulta banco nem storage;
+- devolve `X-Request-ID`;
+- usa `Cache-Control: no-store`.
 
-### Readiness
+Banco e storage pertencem ao readiness. Essa separação evita reinicializações indevidas quando uma dependência externa está indisponível.
+
+## Readiness
 
 `GET /api/readiness`
 
-Objetivo: impedir promoção produtiva quando pré-condições obrigatórias não estão comprovadas.
+Objetivo: declarar se a instância pode receber tráfego produtivo.
 
-O endpoint permanece fail-closed em produção enquanto o BravHAS não possui provider produtivo de documentos configurado.
+O endpoint verifica:
 
-## Logs
+- PostgreSQL;
+- health do storage documental;
+- persistência e segurança produtiva do adapter de storage quando o ambiente é produção.
 
-Regras obrigatórias:
+Produção é fail-closed: provider ausente, desconhecido, local ou não homologado mantém 503/`blocked`.
 
-- não registrar connection strings, tokens, cookies, senhas ou payloads documentais;
-- não despejar objetos de erro completos em handlers públicos quando puderem conter dados sensíveis;
-- preferir mensagem operacional sanitizada + código/identificador de evento;
-- erros de banco e storage devem ser distinguíveis operacionalmente sem vazar detalhes ao cliente.
+A resposta inclui estado sanitizado das dependências, duração e `X-Request-ID`, sem connection string ou credencial.
 
 ## Request / correlation ID
 
-Estado: **NÃO IMPLEMENTADO GLOBALMENTE**.
+Implementação mínima em `lib/observability.ts`:
 
-Proposta para próximo hardening, se necessário:
+- aceita `x-request-id` apenas se respeitar formato restrito;
+- caso contrário gera UUID server-side;
+- propaga o ID em health/readiness;
+- request ID não participa de autenticação ou autorização.
 
-- aceitar `x-request-id` apenas como correlação não confiável ou gerar UUID server-side;
-- devolver o identificador em resposta/headers quando seguro;
-- propagar o mesmo ID nos logs server-side;
-- nunca usar request ID como autenticação/autorização.
+Propagação global por todas as rotas ainda não foi implementada. Estado: `PARTIAL`.
 
-Não é P0 para homologação atual, mas é recomendado antes de operação com suporte multi-tenant em escala.
+## Logging estruturado
 
-## Erros por domínio
+`logOperationalEvent()` emite JSON com:
 
-### Aplicação
+- timestamp;
+- aplicação;
+- operação;
+- request ID;
+- status;
+- duração;
+- error code;
+- referência de tenant/user apenas como hash curto quando explicitamente fornecida.
 
-- resposta ao cliente: mensagem sanitizada;
-- log: contexto mínimo (rota, operação, request ID futuro, tenant ID quando necessário e sem PII excessiva).
+Nunca registrar:
+
+- password;
+- token;
+- cookie;
+- authorization header;
+- secret;
+- connection string;
+- conteúdo documental;
+- PII desnecessária.
+
+`logServerFailure()` omite stack/message de erro em produção e sanitiza diagnósticos em ambientes não produtivos.
+
+## Erros por dependência
 
 ### Banco
 
-- health/readiness retornam `database: unavailable` sem connection string;
-- alertas externos devem ser configurados no provider escolhido antes de produção.
+Readiness retorna `database: unavailable` sem detalhe de conexão. Alerta externo ainda depende da infraestrutura escolhida.
 
 ### Storage
 
-- provider futuro deve implementar `health()` no contrato `DocumentStorage`;
-- falhas de upload/leitura/exclusão devem manter tenant e autorização no servidor;
-- readiness produtivo só pode ficar verde quando o adapter real estiver configurado e homologado.
+`DocumentStorage.health()` fornece provider, persistência e capacidade produtiva. Storage inválido impede readiness verde.
 
-## Evidência para produção
+### Aplicação
 
-- health monitorado externamente;
-- readiness monitorado externamente;
-- alerta de erro/indisponibilidade configurado;
+Erros públicos devem utilizar mensagens sanitizadas e status HTTP coerente; detalhes ficam no diagnóstico server-side sem segredo.
+
+## Evidência externa ainda necessária
+
+- monitor sintético de health/readiness;
+- alerta de erro/indisponibilidade;
 - retenção de logs definida;
-- acesso a logs restrito;
-- teste de alerta realizado;
-- erro de banco simulado/observado em ambiente controlado;
-- erro de storage simulado/observado em ambiente controlado;
+- acesso aos logs restrito;
+- teste real de alerta;
+- simulação controlada de falha de banco/storage;
 - responsável operacional definido.
 
-Sem essas evidências, Observabilidade permanece `PARCIAL`.
+Até essas evidências existirem, Observabilidade permanece `PARCIAL` e não `COMPROVADO EM PRODUÇÃO`.
