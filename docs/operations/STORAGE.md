@@ -48,6 +48,24 @@ A validação server-side cobre:
 
 Atributo `accept` do browser é apenas UX; a decisão de segurança ocorre no servidor.
 
+## Checksum e evidência persistida
+
+`validateDocumentUpload()` calcula SHA-256 do conteúdo real antes da persistência.
+
+No fluxo atual de upload:
+
+1. `DocumentStorage.save()` devolve `checksumSha256`;
+2. a criação de `HrEmployeeDocument` e o `HrAuditEvent` ocorrem na mesma transação Prisma;
+3. o `HrAuditEvent.metadata` persiste `mimeType`, `size` e `checksumSha256` quando houve upload real.
+
+Portanto:
+
+`CHECKSUM PERSISTED = YES`
+
+A persistência ocorre no audit trail transacional, não em uma coluna dedicada de `HrEmployeeDocument`.
+
+Não existe justificativa, neste momento, para migration apenas para duplicar essa evidência. Um futuro adapter produtivo deve preservar metadata/checksum e sua homologação deve provar integridade de leitura. Se a política operacional exigir consulta direta do checksum no registro documental, isso deverá ser tratado como requisito explícito antes de criar nova coluna.
+
 ## Escopo e traversal
 
 O adapter local valida:
@@ -72,6 +90,21 @@ No fluxo de criação documental:
 
 No fluxo de verificação documental, atualização + audit log são atômicos.
 
+## Contract conformance interno
+
+O `Quality` executa teste do adapter local contra o contrato mínimo:
+
+- save;
+- read;
+- delete;
+- checksum estável entre save/read;
+- integridade dos bytes;
+- isolamento de tenant em read/delete;
+- health;
+- confirmação de que o adapter local não é persistente nem production-safe.
+
+Esse teste serve como baseline de comportamento do contrato. Ele **não** transforma filesystem local em provider de produção e não substitui homologação do futuro provider real.
+
 ## Homologação obrigatória do futuro adapter produtivo
 
 - [ ] upload autorizado;
@@ -80,6 +113,7 @@ No fluxo de verificação documental, atualização + audit log são atômicos.
 - [ ] Alpha não lê objeto Beta;
 - [ ] Alpha não exclui objeto Beta;
 - [ ] metadata consistente;
+- [ ] checksum/integridade consistente após leitura;
 - [ ] limite de tamanho/MIME aplicado;
 - [ ] assinatura de conteúdo validada ou proteção equivalente;
 - [ ] arquivo vazio rejeitado;
