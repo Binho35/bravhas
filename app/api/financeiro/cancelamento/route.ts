@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { CancelFinancialAccountUseCase } from "@/modules/financial/application/use-cases/CancelFinancialAccountUseCase";
-import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
-import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+import { runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
 const SAFE_ERRORS = [
@@ -29,16 +28,13 @@ export async function POST(request: Request) {
     }
 
     const { actor } = await requireFinancialAccount(accountId);
-    const useCase = new CancelFinancialAccountUseCase(
-      new PrismaFinancialAccountRepository(),
-      new PrismaFinancialTransactionRepository(),
+    const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
+      new CancelFinancialAccountUseCase(accountRepository, transactionRepository).execute({
+        accountId: accountId.trim(),
+        canceledBy: actor.id,
+        cancellationDate,
+      }),
     );
-
-    const result = await useCase.execute({
-      accountId: accountId.trim(),
-      canceledBy: actor.id,
-      cancellationDate,
-    });
 
     return NextResponse.json({
       success: true,
@@ -48,12 +44,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logServerFailure("Erro ao cancelar conta financeira", error);
+    const validationError = error instanceof Error && SAFE_ERRORS.includes(error.message as (typeof SAFE_ERRORS)[number]);
     return NextResponse.json(
       {
         success: false,
         message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível cancelar a conta financeira."),
       },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }
