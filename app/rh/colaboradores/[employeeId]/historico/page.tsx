@@ -9,6 +9,7 @@ const ACTION_LABELS: Record<string, string> = {
   EMPLOYEE_UPDATED: "Cadastro atualizado",
   EMPLOYEE_ADMISSION_COMPLETED: "Admissão concluída",
   EMPLOYEE_DOCUMENT_CREATED: "Documento adicionado",
+  EMPLOYEE_DOCUMENT_UPDATED: "Documento atualizado",
   EMPLOYEE_DOCUMENT_VERIFIED: "Documento conferido",
 };
 
