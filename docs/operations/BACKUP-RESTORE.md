@@ -4,89 +4,99 @@
 
 Use apenas estes estados:
 
-- `DOCUMENTADO`: procedimento existe no repositório;
+- `DOCUMENTADO`: procedimento existe;
+- `READY TO EXERCISE`: tooling interno existe e está preparado, mas não foi executado contra infraestrutura real;
 - `CONFIGURADO`: infraestrutura real configurada e auditada;
 - `EXECUTADO`: backup real executado com evidência;
 - `RESTAURADO`: restore real concluído em ambiente isolado;
 - `COMPROVADO`: backup + restore + validações aprovadas e evidenciadas.
 
-Estado atual do BravHAS neste documento: **DOCUMENTADO**. Nenhuma infraestrutura externa é presumida.
+Estado atual: **READY TO EXERCISE / NÃO EXECUTADO EM INFRA REAL**.
+
+## Tooling disponível
+
+### Backup
+
+- dry-run: `npm run backup:dry-run`;
+- execução: `npm run backup:execute`.
+
+O backup real:
+
+- usa `pg_dump` custom format;
+- não imprime connection string/senha;
+- gera nome de artefato com ambiente/timestamp;
+- registra identificador sanitizado do banco por hash;
+- calcula SHA-256;
+- gera manifesto JSON;
+- captura contagens críticas antes do dump;
+- falha com exit code não zero se o artefato/contagens não forem obtidos.
+
+### Restore
+
+- guard self-test: `npm run restore:guard:self-test`;
+- dry-run: requer artefato/manifesto e valida checksum sem restaurar;
+- execução não produtiva: `npm run restore:execute -- --artifact=/caminho/arquivo.dump`.
+
+Execução de restore exige simultaneamente:
+
+- ambiente NÃO produtivo;
+- `BRAVHAS_RESTORE_ALLOWED=true`;
+- flag explícita `--confirm-non-production` incorporada ao script npm;
+- artefato e manifesto válidos;
+- checksum SHA-256 válido.
+
+Restore em produção é explicitamente recusado pelo tooling.
+
+## Acceptance Contract
+
+O exercício futuro só pode ser aprovado quando produzir evidência objetiva para:
+
+- `BACKUP_CREATED=PASS`;
+- `CHECKSUM_VALID=PASS`;
+- `ROW_COUNTS_CAPTURED=PASS`;
+- `RESTORE_COMPLETED=PASS`;
+- `MIGRATION_STATUS=PASS`;
+- `ROW_COUNTS_VALID=PASS`;
+- `TENANT_DATA_VALID=PASS`;
+- `APPLICATION_SMOKE_PASS=PASS`.
+
+O tooling de restore já compara contagens de Company, User, HrEmployee, HrEmployeeDocument, FinancialAccount, FinancialTransaction e Obligation e valida invariantes tenant críticas.
+
+O smoke da aplicação permanece `DEFERRED_RUNTIME_VALIDATION` até existir ambiente restaurado executável.
 
 ## Política proposta
 
-A política deve ser validada pela governança antes de produção.
+A política deve ser aprovada antes de produção. Nenhum prazo abaixo é regra jurídica.
 
-- banco PostgreSQL: backup automatizado diário, com capacidade de recuperação point-in-time quando o provider escolhido oferecer;
-- documentos: versionamento/replicação conforme recursos do object storage contratado;
-- retenção sugerida: 30 dias para backups diários e pelo menos 12 checkpoints mensais para necessidade administrativa, sujeita a LGPD e política de retenção da BravSystems;
-- criptografia: em trânsito e em repouso;
-- acesso: conta de serviço mínima, sem credencial compartilhada;
-- exclusões: nunca apagar backup para “liberar espaço” sem política de retenção aprovada.
+- PostgreSQL: backup automatizado diário e PITR quando o provider suportar;
+- documentos: versionamento/replicação conforme object storage escolhido;
+- retenção operacional sugerida: 30 dias de backups diários e checkpoints mensais, sujeita à política formal;
+- criptografia em trânsito e repouso;
+- conta de serviço com privilégio mínimo;
+- nenhuma exclusão manual de backups fora da política aprovada.
+
+Retenção legal final: `BUSINESS/LEGAL DECISION REQUIRED`.
 
 ## RPO e RTO propostos
 
-Estes valores são **propostas**, não SLA aprovado:
+Propostas, não SLA:
 
-- RPO alvo inicial: até 24 horas enquanto houver apenas backup diário; reduzir quando houver PITR comprovado;
-- RTO alvo inicial: até 4 horas para restauração técnica em incidente crítico, condicionado ao provider, volume e equipe disponível.
+- RPO inicial: até 24 horas com backup diário;
+- RTO inicial: até 4 horas, condicionado a provider, volume e equipe.
 
-A produção só pode declarar RPO/RTO após exercício real cronometrado.
+Somente exercício cronometrado pode converter proposta em evidência operacional.
 
-## Procedimento de backup
+## Procedimento futuro consolidado
 
-1. identificar ambiente, banco, storage e versão da aplicação;
-2. registrar timestamp, commit SHA e responsável pela execução;
-3. executar mecanismo oficial do provider de banco sem expor connection string em log;
-4. registrar identificador do backup/snapshot;
-5. confirmar integridade/status pelo provider;
-6. para documentos, confirmar que objetos e metadata fazem parte da política de proteção;
-7. armazenar evidência operacional sem copiar secrets para o repositório.
+1. identificar HEAD/deployment e ambiente;
+2. executar backup oficial;
+3. preservar dump + manifesto/checksum em local seguro;
+4. provisionar destino isolado;
+5. executar restore protegido;
+6. confirmar migrations, contagens e integridade tenant;
+7. configurar aplicação contra o destino isolado;
+8. executar smoke autenticado/cross-tenant;
+9. medir RPO/RTO;
+10. preservar evidências e encerrar ambiente isolado conforme política.
 
-## Procedimento de restore
-
-Nunca testar restore sobre produção.
-
-1. provisionar destino isolado e descartável;
-2. restaurar o backup selecionado;
-3. configurar aplicação de homologação para o banco restaurado usando secrets do ambiente;
-4. executar `npx prisma migrate status` sem migration destrutiva;
-5. validar autenticação, tenant isolation e contagens básicas;
-6. validar Financeiro, Obrigações, Pessoas e metadata documental;
-7. validar acesso a objetos documentais quando o storage produtivo existir;
-8. registrar início/fim do exercício para medir RTO;
-9. comparar timestamp do último dado recuperado para medir RPO observado;
-10. destruir o ambiente isolado conforme política de segurança após retenção da evidência.
-
-## Checklist de aprovação de restore
-
-- [ ] origem do backup identificada;
-- [ ] restore executado em ambiente isolado;
-- [ ] banco inicia sem corrupção aparente;
-- [ ] migrations em estado esperado;
-- [ ] login funcional;
-- [ ] Tenant Alpha não acessa Tenant Beta;
-- [ ] Financeiro íntegro;
-- [ ] Obrigações íntegras;
-- [ ] Pessoas íntegras;
-- [ ] documentos e metadata íntegros;
-- [ ] objetos do storage acessíveis pelo tenant correto;
-- [ ] RPO observado registrado;
-- [ ] RTO observado registrado;
-- [ ] evidências preservadas;
-- [ ] resultado aprovado por responsável autorizado.
-
-## Evidência mínima para produção
-
-Para mudar o status para `COMPROVADO`, exigir no mínimo:
-
-- identificação do provider e ambiente;
-- timestamp do backup;
-- identificador do backup/snapshot;
-- timestamp do restore;
-- ambiente de restore;
-- resultado das verificações pós-restore;
-- RPO observado;
-- RTO observado;
-- responsável e aprovação.
-
-Sem isso, o item permanece no máximo `DOCUMENTADO` ou `CONFIGURADO`.
+Nenhum backup/restore de produção foi executado neste ciclo.
