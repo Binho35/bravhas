@@ -43,25 +43,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
       - name: Install
         run: npm ci --no-audit --no-fund
-
       - name: Production dependency audit
         run: node scripts/dependency-audit.mjs
-
       - name: Prisma validate
         run: npx prisma validate
-
       - name: Prisma generate
         run: npx prisma generate
-
       - name: Migration safety
         run: |
           if grep -R 'db push --accept-data[-]loss' --exclude-dir=.agents --exclude-dir=.claude --exclude-dir=.windsurf --exclude-dir=node_modules --exclude='*.md' . | grep -q .; then
@@ -72,7 +66,6 @@ jobs:
             echo "Forbidden destructive Prisma migration command found"
             exit 1
           fi
-
       - name: Security regression
         run: |
           ! grep -R "BRAVHAS_DEV_AUTH_BYPASS.*true" app modules lib --include='*.ts' --include='*.tsx'
@@ -89,31 +82,24 @@ jobs:
           grep -q 'E2E seed recusado fora de TEST/HOMOLOGATION' scripts/e2e-seed.ts
           grep -q 'PRODUCTION_RESTORE_FORBIDDEN' scripts/restore-database.mjs
           grep -q 'LOCAL_FORBIDDEN_IN_PRODUCTION' scripts/production-preflight.mjs
-
       - name: Repository readiness regression
         run: node scripts/repository-readiness-check.mjs
-
       - name: Unit security contracts
         run: npm run test:unit
-
       - name: Operational safety contracts
         run: npm run test:contracts
-
       - name: Apply migrations
         run: npx prisma migrate deploy
-
       - name: Seed
         run: npm run seed
-
       - name: Data integrity
         run: npm run test:integrity
-
+      - name: Functional integration workflows
+        run: npm run test:integration
       - name: TypeScript
         run: npm run typecheck
-
       - name: Lint
         run: npm run lint
-
       - name: Build
         run: npm run build
 
@@ -160,7 +146,7 @@ jobs:
 
   browser-security-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -183,36 +169,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
       - name: Install
         run: npm ci --no-audit --no-fund
-
       - name: Prisma generate
         run: npx prisma generate
-
       - name: Apply migrations
         run: npx prisma migrate deploy
-
       - name: Synthetic E2E fixtures
         run: npm run e2e:seed
-
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
       - name: Authenticated E2E
         run: npm run test:e2e:auth
-
       - name: Cross-tenant and RBAC negative E2E
         run: npm run test:e2e:security
-
+      - name: Functional workflow golden path
+        run: npm run test:e2e:functional
       - name: Desktop consolidated product smoke
         run: npm run test:e2e:desktop
-
       - name: Mobile product smoke
         run: npm run test:e2e:mobile
