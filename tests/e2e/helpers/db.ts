@@ -12,6 +12,8 @@ type PoolConstructor = new (options: { connectionString: string; max: number }) 
 const { Pool } = require("pg") as { Pool: PoolConstructor };
 
 const AUTHORIZED_E2E_ENVIRONMENTS = new Set(["TEST", "HOMOLOGATION"]);
+const DB_CONVERGENCE_ATTEMPTS = 20;
+const DB_CONVERGENCE_DELAY_MS = 150;
 let pool: PoolLike | null = null;
 
 function connectionString() {
@@ -32,9 +34,18 @@ function getPool() {
   return pool;
 }
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 export async function dbOne<T extends QueryRow>(sql: string, params: unknown[] = []): Promise<T | null> {
-  const result = await getPool().query(sql, params);
-  return (result.rows[0] as T | undefined) ?? null;
+  for (let attempt = 0; attempt < DB_CONVERGENCE_ATTEMPTS; attempt += 1) {
+    const result = await getPool().query(sql, params);
+    const row = result.rows[0] as T | undefined;
+    if (row) return row;
+    if (attempt < DB_CONVERGENCE_ATTEMPTS - 1) await delay(DB_CONVERGENCE_DELAY_MS);
+  }
+  return null;
 }
 
 export async function dbMany<T extends QueryRow>(sql: string, params: unknown[] = []): Promise<T[]> {
