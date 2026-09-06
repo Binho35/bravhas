@@ -31,7 +31,7 @@ test("production storage readiness fails closed when provider is missing", async
     assert.equal(health.ok, false);
     assert.equal(health.persistent, false);
     assert.equal(health.productionSafe, false);
-    assert.equal(health.errorCode, "CONFIGURATION_INVALID");
+    assert.equal(health.code, "CONFIGURATION_INVALID");
 
     assert.throws(
       () => getDocumentStorage(),
@@ -60,7 +60,7 @@ test("production storage readiness fails closed for an unknown provider", async 
     assert.equal(health.ok, false);
     assert.equal(health.persistent, false);
     assert.equal(health.productionSafe, false);
-    assert.equal(health.errorCode, "CONFIGURATION_INVALID");
+    assert.equal(health.code, "CONFIGURATION_INVALID");
 
     assert.throws(
       () => getDocumentStorage(),
