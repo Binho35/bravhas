@@ -10,7 +10,7 @@ async function activateEmployee(formData: FormData) {
   "use server";
   const actor = await hrdpPermission.admissoes("approve");
   const employeeId = formData.get("employeeId");
-  if (typeof employeeId !== "string" || !employeeId) throw new Error("Colaborador inválido.");
+  if (typeof employeeId !== "string" || !employeeId.trim()) throw new Error("Colaborador inválido.");
 
   const employee = await prisma.hrEmployee.findFirst({
     where: { id: employeeId, companyId: actor.companyId, status: "PRE_ADMISSION" },
@@ -21,8 +21,24 @@ async function activateEmployee(formData: FormData) {
   if (employee.documents.length === 0) throw new Error("Inclua ao menos um documento no dossiê antes de concluir a admissão.");
   if (employee.documents.some((doc) => !doc.verifiedAt)) throw new Error("Existem documentos pendentes de verificação.");
 
-  await prisma.hrEmployee.update({ where: { id: employeeId }, data: { status: "ACTIVE", active: true } });
-  await logHrdpAudit({ companyId: actor.companyId, actorUserId: actor.id, action: "EMPLOYEE_ADMISSION_COMPLETED", entityType: "HrEmployee", entityId: employeeId });
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.hrEmployee.updateMany({
+      where: { id: employeeId, companyId: actor.companyId, status: "PRE_ADMISSION" },
+      data: { status: "ACTIVE", active: true },
+    });
+    if (updated.count !== 1) throw new Error("Pré-admissão fora do escopo autorizado ou já processada.");
+
+    await logHrdpAudit(
+      {
+        companyId: actor.companyId,
+        actorUserId: actor.id,
+        action: "EMPLOYEE_ADMISSION_COMPLETED",
+        entityType: "HrEmployee",
+        entityId: employeeId,
+      },
+      tx,
+    );
+  });
 
   revalidatePath("/rh/admissoes");
   revalidatePath("/rh/colaboradores");
