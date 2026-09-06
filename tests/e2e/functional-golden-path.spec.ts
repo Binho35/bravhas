@@ -165,7 +165,7 @@ test("functional golden path closes master data, employee admission, history, ob
     await expect(page.locator("article").filter({ has: page.locator(`input[name="id"][value="${department!.id}"]`) }).locator('input[name="name"]')).toHaveValue(departmentName);
     expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.name).toBe(departmentName);
 
-    await page.getByRole("link", { name: "Visão geral" }).click();
+    await page.getByLabel("Cadastros organizacionais").getByRole("link", { name: "Visão geral" }).click();
     const positionCreateForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Cadastrar cargo" }) });
     await positionCreateForm.locator('input[name="name"]').fill(positionOriginal);
     await positionCreateForm.locator('select[name="departmentId"]').selectOption({ label: departmentName });
