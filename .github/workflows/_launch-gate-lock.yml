@@ -5,24 +5,30 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate-lock:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - name: Generate deterministic lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Upload lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-gate-package-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit lockfile and remove transient helper
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/_launch-gate-lock.yml
+          git add package-lock.json
+          git commit -m "chore(launch): lock Vercel Blob dependency"
+          git push origin "HEAD:${HEAD_REF}"
