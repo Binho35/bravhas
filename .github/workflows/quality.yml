@@ -105,6 +105,9 @@ jobs:
       - name: Seed
         run: npm run seed
 
+      - name: Data integrity
+        run: npm run test:integrity
+
       - name: TypeScript
         run: npm run typecheck
 
