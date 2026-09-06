@@ -5,7 +5,7 @@ type IntegrityCheck = { name: string; run: () => Promise<number> };
 
 async function count(query: Promise<unknown>) {
   const rows = (await query) as CountRow[];
-  return Number(rows[0]?.count ?? 0n);
+  return rows[0] ? Number(rows[0].count) : 0;
 }
 
 const checks: IntegrityCheck[] = [
