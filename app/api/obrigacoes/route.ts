@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
@@ -32,7 +32,7 @@ export async function GET() {
     logServerFailure("Erro ao listar obrigações", error);
     return NextResponse.json(
       { success: false, message: "Não foi possível carregar as obrigações." },
-      { status: 401 },
+      { status: serverErrorStatus(error) },
     );
   }
 }
@@ -83,9 +83,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, obligation }, { status: 201 });
   } catch (error) {
     logServerFailure("Erro ao criar obrigação", error);
+    const validationError = error instanceof Error && CREATE_SAFE_ERRORS.includes(error.message as (typeof CREATE_SAFE_ERRORS)[number]);
     return NextResponse.json(
       { success: false, message: safeErrorMessage(error, CREATE_SAFE_ERRORS, "Não foi possível criar a obrigação.") },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }
