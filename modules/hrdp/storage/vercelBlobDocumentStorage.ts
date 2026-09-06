@@ -58,8 +58,8 @@ const sdkOperations: VercelBlobOperations = {
       stream: result.stream as ReadableStream<Uint8Array> | null,
       blob: {
         pathname: result.blob.pathname,
-        contentType: result.blob.contentType,
-        size: result.blob.size,
+        contentType: result.blob.contentType ?? undefined,
+        size: result.blob.size ?? undefined,
       },
     };
   },
