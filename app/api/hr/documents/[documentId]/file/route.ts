@@ -1,22 +1,10 @@
-import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure, serverErrorStatus } from "@/lib/serverErrors";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
-import {
-  isLocalDocumentStorageKey,
-  localDocumentOriginalName,
-  readLocalDocumentFile,
-} from "@/modules/hrdp/storage/localDocumentStorage";
-
-function contentTypeFromName(name: string) {
-  const extension = path.extname(name).toLowerCase();
-  if (extension === ".pdf") return "application/pdf";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  if (extension === ".png") return "image/png";
-  if (extension === ".webp") return "image/webp";
-  return "application/octet-stream";
-}
+import { StorageError } from "@/modules/hrdp/storage/documentStorage";
+import { isLocalDocumentStorageKey, localDocumentStorage } from "@/modules/hrdp/storage/localDocumentStorage";
 
 export async function GET(
   _request: Request,
@@ -28,26 +16,38 @@ export async function GET(
 
     const document = await prisma.hrEmployeeDocument.findFirst({
       where: { id: documentId, companyId: actor.companyId },
-      select: { id: true, storageKey: true, title: true },
+      select: { id: true, employeeId: true, storageKey: true },
     });
 
     if (!document?.storageKey || !isLocalDocumentStorageKey(document.storageKey)) {
       return NextResponse.json({ success: false, message: "Arquivo não encontrado." }, { status: 404 });
     }
 
-    const fileName = localDocumentOriginalName(document.storageKey) || `${document.title}.pdf`;
-    const bytes = await readLocalDocumentFile(document.storageKey);
+    const file = await localDocumentStorage.read({
+      companyId: actor.companyId,
+      employeeId: document.employeeId,
+      storageKey: document.storageKey,
+    });
 
-    return new NextResponse(new Uint8Array(bytes), {
+    return new NextResponse(file.bytes, {
       status: 200,
       headers: {
-        "Content-Type": contentTypeFromName(fileName),
-        "Content-Length": String(bytes.byteLength),
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        "Content-Type": file.mimeType,
+        "Content-Length": String(file.size),
+        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
         "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch {
-    return NextResponse.json({ success: false, message: "Não foi possível abrir o arquivo." }, { status: 404 });
+  } catch (error) {
+    logServerFailure("Erro ao abrir documento", error);
+    const status =
+      error instanceof StorageError && (error.code === "RESOURCE_NOT_FOUND" || error.code === "TENANT_ACCESS_DENIED")
+        ? 404
+        : serverErrorStatus(error);
+    return NextResponse.json(
+      { success: false, message: status === 401 || status === 403 ? "Acesso não autorizado." : "Arquivo não encontrado." },
+      { status: status === 500 ? 404 : status },
+    );
   }
 }
