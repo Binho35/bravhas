@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
+import { FINANCIAL_OPERATION_ID_INVALID, FINANCIAL_OPERATION_ID_REUSED } from "@/modules/financial/application/financialIdempotency";
 import { CancelFinancialAccountUseCase } from "@/modules/financial/application/use-cases/CancelFinancialAccountUseCase";
-import { runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
+import { FINANCIAL_CONCURRENCY_MESSAGE, runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
 const SAFE_ERRORS = [
@@ -12,20 +13,22 @@ const SAFE_ERRORS = [
   "Conta financeira não encontrada.",
   "Esta conta já está cancelada.",
   "Uma conta já liquidada não pode ser cancelada.",
+  FINANCIAL_OPERATION_ID_INVALID,
+  FINANCIAL_OPERATION_ID_REUSED,
+  FINANCIAL_CONCURRENCY_MESSAGE,
 ] as const;
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const accountId = typeof body.accountId === "string" ? body.accountId : "";
+    const operationId = typeof body.operationId === "string" ? body.operationId : undefined;
     const cancellationDate =
       typeof body.cancellationDate === "string" && body.cancellationDate.trim()
         ? new Date(body.cancellationDate)
         : undefined;
 
-    if (cancellationDate && Number.isNaN(cancellationDate.getTime())) {
-      throw new Error("A data do cancelamento é inválida.");
-    }
+    if (cancellationDate && Number.isNaN(cancellationDate.getTime())) throw new Error("A data do cancelamento é inválida.");
 
     const { actor } = await requireFinancialAccount(accountId);
     const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
         accountId: accountId.trim(),
         canceledBy: actor.id,
         cancellationDate,
+        operationId,
       }),
     );
 
@@ -46,11 +50,8 @@ export async function POST(request: Request) {
     logServerFailure("Erro ao cancelar conta financeira", error);
     const validationError = error instanceof Error && SAFE_ERRORS.includes(error.message as (typeof SAFE_ERRORS)[number]);
     return NextResponse.json(
-      {
-        success: false,
-        message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível cancelar a conta financeira."),
-      },
-      { status: validationError ? 400 : serverErrorStatus(error) },
+      { success: false, message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível cancelar a conta financeira.") },
+      { status: validationError ? (serverErrorStatus(error) === 409 ? 409 : 400) : serverErrorStatus(error) },
     );
   }
 }

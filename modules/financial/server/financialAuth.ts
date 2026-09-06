@@ -16,7 +16,7 @@ export async function requireFinancialAccount(accountId: string) {
 
   const account = await prisma.financialAccount.findFirst({
     where: { id, companyId: actor.companyId },
-    select: { id: true, companyId: true },
+    select: { id: true, companyId: true, type: true },
   });
 
   if (!account) throw new Error("Conta financeira não encontrada.");

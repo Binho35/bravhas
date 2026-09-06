@@ -41,13 +41,23 @@ export interface CalculateCashFlowInput {
   endDate?: string;
 }
 
-function normalizeDate(value: string | Date): Date {
+function localToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function normalizeDateOnly(value: string | Date): Date {
+  if (typeof value === "string") {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
   const date = value instanceof Date ? value : new Date(value);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 function toDateKey(value: string | Date): string {
-  const date = normalizeDate(value);
+  const date = normalizeDateOnly(value);
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
@@ -64,10 +74,10 @@ function isActiveAccount(account: CashFlowAccount): boolean {
 }
 
 export function calculateCashFlow({ accounts, transactions, openingBalance = 0, startDate, endDate }: CalculateCashFlowInput): CashFlowSummary {
-  const today = normalizeDate(new Date());
-  const effectiveStart = startDate ? normalizeDate(startDate) : today;
+  const today = localToday();
+  const effectiveStart = startDate ? normalizeDateOnly(startDate) : today;
   const effectiveEnd = endDate
-    ? normalizeDate(endDate)
+    ? normalizeDateOnly(endDate)
     : new Date(effectiveStart.getFullYear(), effectiveStart.getMonth(), effectiveStart.getDate() + 30);
 
   if (effectiveEnd.getTime() < effectiveStart.getTime()) {
@@ -78,12 +88,26 @@ export function calculateCashFlow({ accounts, transactions, openingBalance = 0, 
   const payableAccounts = activeAccounts.filter((account) => account.type === "PAYABLE");
   const receivableAccounts = activeAccounts.filter((account) => account.type === "RECEIVABLE");
 
+  const accountTypeById = new Map(accounts.map((account) => [account.id, account.type] as const));
+  const grossPaid = transactions
+    .filter((transaction) => transaction.type === "PAYMENT")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const grossReceived = transactions
+    .filter((transaction) => transaction.type === "RECEIPT")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const paymentReversals = transactions
+    .filter((transaction) => transaction.type === "REVERSAL" && accountTypeById.get(transaction.accountId) === "PAYABLE")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const receiptReversals = transactions
+    .filter((transaction) => transaction.type === "REVERSAL" && accountTypeById.get(transaction.accountId) === "RECEIVABLE")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+
   const totalPayable = roundCurrency(payableAccounts.reduce((total, account) => total + getAccountRemaining(account), 0));
   const totalReceivable = roundCurrency(receivableAccounts.reduce((total, account) => total + getAccountRemaining(account), 0));
-  const totalPaid = roundCurrency(transactions.filter((transaction) => transaction.type === "PAYMENT").reduce((total, transaction) => total + transaction.amount, 0));
-  const totalReceived = roundCurrency(transactions.filter((transaction) => transaction.type === "RECEIPT").reduce((total, transaction) => total + transaction.amount, 0));
-  const overduePayable = roundCurrency(payableAccounts.filter((account) => normalizeDate(account.dueDate).getTime() < today.getTime()).reduce((total, account) => total + getAccountRemaining(account), 0));
-  const overdueReceivable = roundCurrency(receivableAccounts.filter((account) => normalizeDate(account.dueDate).getTime() < today.getTime()).reduce((total, account) => total + getAccountRemaining(account), 0));
+  const totalPaid = roundCurrency(grossPaid - paymentReversals);
+  const totalReceived = roundCurrency(grossReceived - receiptReversals);
+  const overduePayable = roundCurrency(payableAccounts.filter((account) => normalizeDateOnly(account.dueDate).getTime() < today.getTime()).reduce((total, account) => total + getAccountRemaining(account), 0));
+  const overdueReceivable = roundCurrency(receivableAccounts.filter((account) => normalizeDateOnly(account.dueDate).getTime() < today.getTime()).reduce((total, account) => total + getAccountRemaining(account), 0));
   const projectedBalance = roundCurrency(openingBalance + totalReceivable - totalPayable);
 
   const bucketMap = new Map<string, { inflow: number; outflow: number }>();
@@ -93,7 +117,7 @@ export function calculateCashFlow({ accounts, transactions, openingBalance = 0, 
   };
 
   for (const account of activeAccounts) {
-    const dueDate = normalizeDate(account.dueDate);
+    const dueDate = normalizeDateOnly(account.dueDate);
     const bucketDate = dueDate.getTime() < effectiveStart.getTime() ? effectiveStart : dueDate;
     if (bucketDate.getTime() < effectiveStart.getTime() || bucketDate.getTime() > effectiveEnd.getTime()) continue;
     const bucket = ensureBucket(toDateKey(bucketDate));
