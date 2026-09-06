@@ -1,35 +1,34 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const STORAGE_PREFIX = "local:";
-export const LOCAL_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+import {
+  StorageError,
+  assertStorageScope,
+  mimeTypeFromDocumentName,
+  sanitizeDocumentFileName,
+  validateDocumentUpload,
+  type DocumentStorage,
+  type DocumentStorageReadInput,
+  type DocumentStorageScope,
+} from "./documentStorage";
 
-const ALLOWED_MIME_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const STORAGE_PREFIX = "local:";
 
 function storageRoot() {
   return path.join(process.cwd(), ".bravhas", "uploads");
 }
 
-function sanitizeFileName(name: string) {
-  const base = path.basename(name || "documento");
-  const safe = base
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[-.]+|[-.]+$/g, "");
-  return safe || "documento";
+function productionEnvironment() {
+  return process.env.NODE_ENV === "production" || process.env.BRAVHAS_ENV === "PRODUCTION";
 }
 
 function ensureLocalStorageAllowed() {
-  if (process.env.NODE_ENV === "production" || process.env.BRAVHAS_ENV === "PRODUCTION") {
-    throw new Error("Upload local não está habilitado em produção. Configure um storage persistente antes do deploy produtivo.");
+  if (productionEnvironment()) {
+    throw new StorageError(
+      "CONFIGURATION_INVALID",
+      "Upload local não está habilitado em produção. Configure um storage persistente antes do deploy produtivo.",
+    );
   }
 }
 
@@ -44,43 +43,125 @@ export function localDocumentOriginalName(storageKey: string) {
   return separator >= 0 ? storedName.slice(separator + 1) : storedName;
 }
 
-export async function saveLocalDocumentFile(input: {
-  companyId: string;
-  employeeId: string;
-  file: File;
-}) {
-  ensureLocalStorageAllowed();
-
-  if (input.file.size <= 0) throw new Error("Selecione um arquivo para upload.");
-  if (input.file.size > LOCAL_DOCUMENT_MAX_BYTES) throw new Error("O arquivo deve ter no máximo 5 MB.");
-  if (!ALLOWED_MIME_TYPES.has(input.file.type)) {
-    throw new Error("Formato não permitido. Envie PDF, JPG, PNG ou WEBP.");
-  }
-
-  const safeName = sanitizeFileName(input.file.name);
-  const relative = path.join(input.companyId, input.employeeId, `${randomUUID()}-${safeName}`);
-  const absolute = path.join(storageRoot(), relative);
-
-  await mkdir(path.dirname(absolute), { recursive: true });
-  const bytes = Buffer.from(await input.file.arrayBuffer());
-  await writeFile(absolute, bytes, { flag: "wx" });
-
-  return `${STORAGE_PREFIX}${relative.split(path.sep).join("/")}`;
+function expectedScopePrefix(scope: DocumentStorageScope) {
+  assertStorageScope(scope);
+  return `${scope.companyId}/${scope.employeeId}/`;
 }
 
-export async function readLocalDocumentFile(storageKey: string) {
+function resolveScopedLocalPath(input: DocumentStorageReadInput) {
   ensureLocalStorageAllowed();
-  if (!isLocalDocumentStorageKey(storageKey)) throw new Error("Referência de arquivo local inválida.");
-
-  const relative = storageKey.slice(STORAGE_PREFIX.length);
-  if (!relative || relative.includes("..") || path.isAbsolute(relative)) {
-    throw new Error("Referência de arquivo local inválida.");
+  if (!isLocalDocumentStorageKey(input.storageKey)) {
+    throw new StorageError("RESOURCE_NOT_FOUND", "Referência de arquivo local inválida.");
   }
 
-  const root = storageRoot();
-  const absolute = path.resolve(root, relative);
-  const normalizedRoot = `${path.resolve(root)}${path.sep}`;
-  if (!absolute.startsWith(normalizedRoot)) throw new Error("Referência de arquivo fora da área autorizada.");
+  const relative = input.storageKey.slice(STORAGE_PREFIX.length).replaceAll("\\", "/");
+  if (!relative || relative.includes("..") || path.posix.isAbsolute(relative)) {
+    throw new StorageError("TENANT_ACCESS_DENIED", "Referência de arquivo local inválida.");
+  }
+  if (!relative.startsWith(expectedScopePrefix(input))) {
+    throw new StorageError("TENANT_ACCESS_DENIED", "Arquivo fora do escopo autorizado.");
+  }
 
-  return readFile(absolute);
+  const root = path.resolve(storageRoot());
+  const absolute = path.resolve(root, relative);
+  const normalizedRoot = `${root}${path.sep}`;
+  if (!absolute.startsWith(normalizedRoot)) {
+    throw new StorageError("TENANT_ACCESS_DENIED", "Referência de arquivo fora da área autorizada.");
+  }
+
+  return { absolute, relative };
+}
+
+function asStorageError(error: unknown, message: string) {
+  if (error instanceof StorageError) return error;
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  if (code === "ENOENT") return new StorageError("RESOURCE_NOT_FOUND", "Arquivo não encontrado.");
+  return new StorageError("STORAGE_UNAVAILABLE", message, { cause: error });
+}
+
+export const localDocumentStorage: DocumentStorage = {
+  provider: "local-filesystem",
+
+  async save(input) {
+    ensureLocalStorageAllowed();
+    assertStorageScope(input);
+    const validated = await validateDocumentUpload(input.file);
+    const safeName = sanitizeDocumentFileName(validated.originalName);
+    const relative = path.posix.join(
+      input.companyId,
+      input.employeeId,
+      `${randomUUID()}-${safeName}`,
+    );
+    const root = path.resolve(storageRoot());
+    const absolute = path.resolve(root, ...relative.split("/"));
+    const normalizedRoot = `${root}${path.sep}`;
+    if (!absolute.startsWith(normalizedRoot)) {
+      throw new StorageError("TENANT_ACCESS_DENIED", "Destino de storage fora da área autorizada.");
+    }
+
+    try {
+      await mkdir(path.dirname(absolute), { recursive: true });
+      await writeFile(absolute, validated.bytes, { flag: "wx" });
+    } catch (error) {
+      throw asStorageError(error, "Não foi possível persistir o documento.");
+    }
+
+    return {
+      storageKey: `${STORAGE_PREFIX}${relative}`,
+      originalName: safeName,
+      mimeType: validated.mimeType,
+      size: validated.bytes.byteLength,
+      checksumSha256: validated.checksumSha256,
+    };
+  },
+
+  async read(input) {
+    const { absolute } = resolveScopedLocalPath(input);
+    const originalName = localDocumentOriginalName(input.storageKey);
+    const mimeType = mimeTypeFromDocumentName(originalName);
+    if (!mimeType) {
+      throw new StorageError("VALIDATION_FAILED", "Tipo de arquivo armazenado não reconhecido.");
+    }
+
+    try {
+      const buffer = await readFile(absolute);
+      const bytes = new Uint8Array(buffer);
+      return {
+        storageKey: input.storageKey,
+        originalName,
+        mimeType,
+        size: bytes.byteLength,
+        checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+        bytes,
+      };
+    } catch (error) {
+      throw asStorageError(error, "Não foi possível ler o documento.");
+    }
+  },
+
+  async delete(input) {
+    const { absolute } = resolveScopedLocalPath(input);
+    try {
+      await unlink(absolute);
+    } catch (error) {
+      throw asStorageError(error, "Não foi possível excluir o documento.");
+    }
+  },
+
+  async health() {
+    return {
+      ok: !productionEnvironment(),
+      provider: "local-filesystem",
+      persistent: false,
+      productionSafe: false,
+      ...(!productionEnvironment() ? {} : { code: "CONFIGURATION_INVALID" as const }),
+    };
+  },
+};
+
+export async function saveLocalDocumentFile(input: DocumentStorageScope & { file: File }) {
+  return (await localDocumentStorage.save(input)).storageKey;
 }
