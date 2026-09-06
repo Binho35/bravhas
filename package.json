@@ -17,6 +17,7 @@
     "e2e:seed": "prisma generate && tsx scripts/e2e-seed.ts && tsx scripts/e2e-readiness-fixtures.ts",
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "test:contracts": "node scripts/production-preflight.mjs --self-test && node scripts/restore-database.mjs --self-test && node scripts/backup-database.mjs",
+    "test:integrity": "tsx scripts/data-integrity-check.ts",
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test tests/e2e/auth.spec.ts --project=chromium",
     "test:e2e:security": "playwright test tests/e2e/security.spec.ts tests/e2e/readiness-security.spec.ts tests/e2e/financial-cash-flow.spec.ts --project=chromium",
