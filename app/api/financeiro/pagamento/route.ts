@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { RegisterPaymentUseCase } from "@/modules/financial/application/use-cases/RegisterPaymentUseCase";
+import { runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
 const SAFE_ERRORS = [
@@ -31,12 +32,14 @@ export async function POST(request: Request) {
     }
 
     const { actor } = await requireFinancialAccount(accountId);
-    const result = await new RegisterPaymentUseCase().execute({
-      accountId: accountId.trim(),
-      amount,
-      paidBy: actor.id,
-      paymentDate,
-    });
+    const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
+      new RegisterPaymentUseCase(accountRepository, transactionRepository).execute({
+        accountId: accountId.trim(),
+        amount,
+        paidBy: actor.id,
+        paymentDate,
+      }),
+    );
 
     return NextResponse.json({
       success: true,
@@ -47,12 +50,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logServerFailure("Erro ao registrar pagamento", error);
+    const validationError = error instanceof Error && SAFE_ERRORS.includes(error.message as (typeof SAFE_ERRORS)[number]);
     return NextResponse.json(
       {
         success: false,
         message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o pagamento."),
       },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }
