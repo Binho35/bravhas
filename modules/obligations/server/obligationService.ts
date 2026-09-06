@@ -3,6 +3,16 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { ObligationArea, ObligationPriority, ObligationStatus } from "@/modules/obligations/domain/entities/Obligation";
 
+export const OBLIGATION_INVALID_TRANSITION = "Transição de status da obrigação não permitida.";
+
+export const OBLIGATION_TRANSITIONS: Record<ObligationStatus, readonly ObligationStatus[]> = {
+  PENDING: ["PENDING", "IN_PROGRESS", "OVERDUE", "COMPLETED", "CANCELED"],
+  IN_PROGRESS: ["PENDING", "IN_PROGRESS", "OVERDUE", "COMPLETED", "CANCELED"],
+  OVERDUE: ["PENDING", "IN_PROGRESS", "OVERDUE", "COMPLETED", "CANCELED"],
+  COMPLETED: ["COMPLETED", "PENDING", "IN_PROGRESS"],
+  CANCELED: ["CANCELED", "PENDING", "IN_PROGRESS"],
+};
+
 export type ObligationActor = {
   id: string;
   companyId: string;
@@ -20,6 +30,10 @@ export type ObligationMutationInput = {
   recurrence: string;
   notes: string | null;
 };
+
+export function assertObligationTransition(current: ObligationStatus, next: ObligationStatus) {
+  if (!OBLIGATION_TRANSITIONS[current].includes(next)) throw new Error(OBLIGATION_INVALID_TRANSITION);
+}
 
 function auditAction(previousStatus: string | null, nextStatus: string) {
   if (previousStatus === null) return "OBLIGATION_CREATED";
@@ -71,6 +85,8 @@ export async function updateObligationRecord(actor: ObligationActor, id: string,
     const current = await tx.obligation.findFirst({ where: { id, companyId: actor.companyId } });
     if (!current) return null;
 
+    assertObligationTransition(current.status as ObligationStatus, input.status);
+
     const result = await tx.obligation.updateMany({
       where: { id, companyId: actor.companyId },
       data: {
@@ -112,11 +128,7 @@ export async function updateObligationRecord(actor: ObligationActor, id: string,
         action,
         entityType: "Obligation",
         entityId: id,
-        metadata: {
-          changedFields,
-          previousStatus: current.status,
-          nextStatus: obligation.status,
-        },
+        metadata: { changedFields, previousStatus: current.status, nextStatus: obligation.status },
       },
     });
 

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { FINANCIAL_OPERATION_ID_INVALID, FINANCIAL_OPERATION_ID_REUSED } from "@/modules/financial/application/financialIdempotency";
-import { ReversePaymentUseCase } from "@/modules/financial/application/use-cases/ReversePaymentUseCase";
-import { ReverseReceiptUseCase } from "@/modules/financial/application/use-cases/ReverseReceiptUseCase";
+import { ReversePaymentUseCase, type ReversePaymentResult } from "@/modules/financial/application/use-cases/ReversePaymentUseCase";
+import { ReverseReceiptUseCase, type ReverseReceiptResult } from "@/modules/financial/application/use-cases/ReverseReceiptUseCase";
 import { FINANCIAL_CONCURRENCY_MESSAGE, runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
@@ -25,6 +25,8 @@ const SAFE_ERRORS = [
   FINANCIAL_CONCURRENCY_MESSAGE,
 ] as const;
 
+type ReverseResult = ReversePaymentResult | ReverseReceiptResult;
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     if (reversalDate && Number.isNaN(reversalDate.getTime())) throw new Error("A data do estorno é inválida.");
 
     const { actor, account } = await requireFinancialAccount(accountId);
-    const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
+    const result = await runFinancialTransaction<ReverseResult>(({ accountRepository, transactionRepository }) =>
       account.type === "PAYABLE"
         ? new ReversePaymentUseCase(accountRepository, transactionRepository).execute({
             accountId: accountId.trim(),

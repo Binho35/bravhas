@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import type { ObligationArea, ObligationPriority, ObligationStatus } from "@/modules/obligations/domain/entities/Obligation";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
-import { updateObligationRecord } from "@/modules/obligations/server/obligationService";
+import { OBLIGATION_INVALID_TRANSITION, updateObligationRecord } from "@/modules/obligations/server/obligationService";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
 const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
@@ -18,6 +18,7 @@ const UPDATE_SAFE_ERRORS = [
   "Recorrência inválida.",
   "Informe o responsável.",
   "Informe uma data de vencimento válida.",
+  OBLIGATION_INVALID_TRANSITION,
 ] as const;
 
 type RouteContext = { params: Promise<{ id: string }> };

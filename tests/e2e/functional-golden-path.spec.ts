@@ -208,8 +208,8 @@ test("functional golden path closes master data, employee admission, history, ob
     await page.getByLabel("CPF *").fill(cpf);
     await page.getByLabel("Data de admissão *").fill("2026-09-15");
     await page.getByLabel("Tipo de contrato *").selectOption("CLT");
-    await page.getByLabel("Departamento").selectOption({ label: departmentName });
-    await page.getByLabel("Cargo").selectOption({ label: positionName });
+    await page.locator('select[name="departmentId"]').selectOption({ label: departmentName });
+    await page.locator('select[name="positionId"]').selectOption({ label: positionName });
     await page.getByRole("button", { name: /Salvar e continuar para documentos/ }).click();
     await expect(page).toHaveURL(/\/rh\/colaboradores\/[^/]+\/documentos$/);
 
