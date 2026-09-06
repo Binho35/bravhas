@@ -28,8 +28,10 @@ export async function GET(
       employeeId: document.employeeId,
       storageKey: document.storageKey,
     });
+    const responseBytes = new Uint8Array(file.bytes.byteLength);
+    responseBytes.set(file.bytes);
 
-    return new NextResponse(file.bytes, {
+    return new NextResponse(responseBytes.buffer, {
       status: 200,
       headers: {
         "Content-Type": file.mimeType,
