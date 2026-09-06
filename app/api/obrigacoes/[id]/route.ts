@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
@@ -37,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
     logServerFailure("Erro ao consultar obrigação", error);
     return NextResponse.json(
       { success: false, message: "Não foi possível consultar a obrigação." },
-      { status: 401 },
+      { status: serverErrorStatus(error) },
     );
   }
 }
@@ -99,9 +99,10 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ success: true, obligation });
   } catch (error) {
     logServerFailure("Erro ao atualizar obrigação", error);
+    const validationError = error instanceof Error && UPDATE_SAFE_ERRORS.includes(error.message as (typeof UPDATE_SAFE_ERRORS)[number]);
     return NextResponse.json(
       { success: false, message: safeErrorMessage(error, UPDATE_SAFE_ERRORS, "Não foi possível atualizar a obrigação.") },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }
