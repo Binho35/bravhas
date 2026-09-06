@@ -70,8 +70,10 @@ test("document metadata can be edited, reloaded and audited without changing sto
     await page.goto(`/rh/colaboradores/${employeeId}/historico`);
     await expect(page.getByText("Documento atualizado")).toBeVisible();
 
-    const foreign = await page.goto("/documentos/E2E-DOC-BETA-FOREIGN");
-    expect(foreign?.status()).toBe(404);
+    await page.goto("/documentos/E2E-DOC-BETA-FOREIGN");
+    await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
+    await expect(page.getByText("E2E Beta Documento Estrangeiro", { exact: true })).toHaveCount(0);
   } finally {
     await dbExec(
       `DELETE FROM "HrAuditEvent" WHERE "companyId" = $1 AND "entityType" = 'HrEmployeeDocument' AND "entityId" = $2`,

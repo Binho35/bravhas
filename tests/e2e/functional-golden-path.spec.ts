@@ -32,6 +32,14 @@ async function auditExists(entityType: string, entityId: string, action: string)
   );
 }
 
+async function masterActive(table: "HrDepartment" | "HrPosition", id: string) {
+  const row = await dbOne<{ active: boolean }>(
+    `SELECT active FROM "${table}" WHERE id = $1 AND "companyId" = $2`,
+    [id, COMPANY_ID],
+  );
+  return row?.active;
+}
+
 async function cleanupFunctionalFixture(input: {
   cpf: string;
   departmentNames: string[];
@@ -139,13 +147,13 @@ test("functional golden path closes master data, employee admission, history, ob
     await departmentToggleForm.getByRole("button", { name: "Desativar" }).click();
     departmentToggleForm = toggleForm(page, department!.id);
     await expect(departmentToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
-    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(false);
+    await expect.poll(() => masterActive("HrDepartment", department!.id)).toBe(false);
     expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_DISABLED")).toBeTruthy();
 
     await departmentToggleForm.getByRole("button", { name: "Ativar" }).click();
     departmentToggleForm = toggleForm(page, department!.id);
     await expect(departmentToggleForm.locator("..").getByText(departmentOriginal, { exact: true })).toBeVisible();
-    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrDepartment" WHERE id = $1 AND "companyId" = $2`, [department!.id, COMPANY_ID]))?.active).toBe(true);
+    await expect.poll(() => masterActive("HrDepartment", department!.id)).toBe(true);
     expect(await auditExists("HrDepartment", department!.id, "DEPARTMENT_ENABLED")).toBeTruthy();
 
     await page.getByRole("link", { name: "Editar departamentos" }).click();
@@ -177,13 +185,13 @@ test("functional golden path closes master data, employee admission, history, ob
     await positionToggleForm.getByRole("button", { name: "Desativar" }).click();
     positionToggleForm = toggleForm(page, position!.id);
     await expect(positionToggleForm.getByRole("button", { name: "Ativar" })).toBeVisible();
-    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(false);
+    await expect.poll(() => masterActive("HrPosition", position!.id)).toBe(false);
     expect(await auditExists("HrPosition", position!.id, "POSITION_DISABLED")).toBeTruthy();
 
     await positionToggleForm.getByRole("button", { name: "Ativar" }).click();
     positionToggleForm = toggleForm(page, position!.id);
     await expect(positionToggleForm.locator("..").getByText(positionOriginal, { exact: true })).toBeVisible();
-    expect((await dbOne<MasterRow>(`SELECT id, name, active FROM "HrPosition" WHERE id = $1 AND "companyId" = $2`, [position!.id, COMPANY_ID]))?.active).toBe(true);
+    await expect.poll(() => masterActive("HrPosition", position!.id)).toBe(true);
     expect(await auditExists("HrPosition", position!.id, "POSITION_ENABLED")).toBeTruthy();
 
     await page.getByRole("link", { name: "Editar cargos" }).click();
