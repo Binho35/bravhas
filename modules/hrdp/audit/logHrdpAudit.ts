@@ -10,8 +10,13 @@ export interface HrdpAuditInput {
   metadata?: Prisma.InputJsonValue;
 }
 
-export async function logHrdpAudit(input: HrdpAuditInput) {
-  return prisma.hrAuditEvent.create({
+type HrdpAuditDbClient = Pick<typeof prisma, "hrAuditEvent">;
+
+export async function logHrdpAudit(
+  input: HrdpAuditInput,
+  db: HrdpAuditDbClient = prisma,
+) {
+  return db.hrAuditEvent.create({
     data: {
       companyId: input.companyId,
       actorUserId: input.actorUserId ?? null,
