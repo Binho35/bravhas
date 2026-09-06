@@ -144,6 +144,89 @@ jobs:
       - name: Migration status
         run: npx prisma migrate status
 
+  backup-restore-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bravhas_recovery_source
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d bravhas_recovery_source"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_source
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_source
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_shadow
+      BRAVHAS_DEV_AUTH_BYPASS: "false"
+      BRAVHAS_ENV: TEST
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: PostgreSQL recovery tools
+        run: |
+          pg_dump --version
+          pg_restore --version
+          psql --version
+      - name: Prisma generate
+        run: npx prisma generate
+      - name: Source migrations
+        run: npx prisma migrate deploy
+      - name: Synthetic recovery data
+        run: |
+          npm run e2e:seed
+          npm run recovery:fixture
+      - name: Source data integrity
+        run: npm run test:integrity
+      - name: Backup source database
+        run: |
+          rm -rf .bravhas/recovery
+          mkdir -p .bravhas/recovery
+          npm run backup:execute -- --output-dir=.bravhas/recovery
+          dump="$(find .bravhas/recovery -maxdepth 1 -type f -name '*.dump' -print -quit)"
+          test -n "$dump"
+          test -f "$dump.manifest.json"
+          echo "RECOVERY_DUMP=$dump" >> "$GITHUB_ENV"
+      - name: Create isolated restore database
+        env:
+          PGPASSWORD: postgres
+        run: >-
+          psql --host=localhost --port=5434 --username=postgres --dbname=postgres
+          --set=ON_ERROR_STOP=1 --command='CREATE DATABASE bravhas_recovery_restore'
+      - name: Restore into isolated database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_shadow
+          BRAVHAS_RESTORE_ALLOWED: "true"
+        run: npm run restore:execute -- --artifact="$RECOVERY_DUMP"
+      - name: Post-restore data integrity
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_shadow
+        run: npm run test:integrity
+      - name: Post-restore critical records
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_restore
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5434/bravhas_recovery_shadow
+        run: npm run recovery:verify
+
   browser-security-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20

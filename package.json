@@ -15,6 +15,8 @@
     "seed": "npm run db:seed",
     "auth:set-password": "prisma generate && tsx scripts/set-user-password.ts",
     "e2e:seed": "prisma generate && tsx scripts/e2e-seed.ts && tsx scripts/e2e-readiness-fixtures.ts",
+    "recovery:fixture": "tsx scripts/recovery-fixture.ts",
+    "recovery:verify": "tsx scripts/recovery-verify.ts",
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "test:integration": "tsx --test tests/integration/*.test.ts",
     "test:contracts": "node scripts/production-preflight.mjs --self-test && node scripts/restore-database.mjs --self-test && node scripts/backup-database.mjs",
