@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
 import { ReversePaymentUseCase } from "@/modules/financial/application/use-cases/ReversePaymentUseCase";
-import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
-import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+import { runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
 const SAFE_ERRORS = [
@@ -38,17 +37,14 @@ export async function POST(request: Request) {
     }
 
     const { actor } = await requireFinancialAccount(accountId);
-    const useCase = new ReversePaymentUseCase(
-      new PrismaFinancialAccountRepository(),
-      new PrismaFinancialTransactionRepository(),
+    const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
+      new ReversePaymentUseCase(accountRepository, transactionRepository).execute({
+        accountId: accountId.trim(),
+        amount,
+        reversedBy: actor.id,
+        reversalDate,
+      }),
     );
-
-    const result = await useCase.execute({
-      accountId: accountId.trim(),
-      amount,
-      reversedBy: actor.id,
-      reversalDate,
-    });
 
     return NextResponse.json({
       success: true,
@@ -59,12 +55,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logServerFailure("Erro ao registrar estorno", error);
+    const validationError = error instanceof Error && SAFE_ERRORS.includes(error.message as (typeof SAFE_ERRORS)[number]);
     return NextResponse.json(
       {
         success: false,
         message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o estorno."),
       },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }
