@@ -1,0 +1,58 @@
+name: HOMO-005C Lock Sync
+
+on:
+  pull_request:
+    branches:
+      - feature/bravhas-homologation-production-readiness
+    paths:
+      - package.json
+      - .github/workflows/homo-005c-lock-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lock-sync:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/bravhas-homo-005-human-golden-path'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/bravhas-homo-005-human-golden-path
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Regenerate package lock only
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify patched dependency graph
+        run: |
+          node - <<'NODE'
+          const lock = require('./package-lock.json');
+          const expected = {
+            'node_modules/next': '16.3.4',
+            'node_modules/js-yaml': '4.3.2',
+            'node_modules/sharp': '0.35.4',
+          };
+          for (const [key, version] of Object.entries(expected)) {
+            if (lock.packages?.[key]?.version !== version) {
+              throw new Error(`${key}: expected ${version}, got ${lock.packages?.[key]?.version}`);
+            }
+          }
+          console.log('HOMO005C_LOCK_PATCHES=PASS');
+          NODE
+
+      - name: Commit lock and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git rm .github/workflows/homo-005c-lock-sync.yml
+          git commit -m "security(deps): sincronizar lockfile corrigido"
+          git push origin HEAD:fix/bravhas-homo-005-human-golden-path
