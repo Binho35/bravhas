@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
+import type { AuthUserRole } from "../types/AuthUser";
 import { getServerAuthUser } from "./session";
 
 export const RBAC_RESOURCES = [
@@ -24,6 +25,7 @@ export const RBAC_RESOURCES = [
 
 export type RbacResource = (typeof RBAC_RESOURCES)[number];
 export type RbacAction = "view" | "create" | "edit" | "approve" | "delete" | "export";
+export type HrdpDepartment = "RH" | "DP";
 
 type PermissionFlags = {
   canView: boolean;
@@ -34,6 +36,28 @@ type PermissionFlags = {
   canExport: boolean;
 };
 
+const RH_RESOURCES = new Set<RbacResource>([
+  "colaboradores",
+  "admissoes",
+  "recrutamento",
+  "desempenho",
+  "canal-rh",
+  "organizacao",
+  "relatorios",
+  "auditoria",
+  "configuracoes",
+]);
+
+const DP_RESOURCES = new Set<RbacResource>([
+  "ponto",
+  "ferias",
+  "beneficios",
+  "afastamentos",
+  "medidas-disciplinares",
+  "desligamentos",
+  "folha",
+]);
+
 const actionColumn: Record<RbacAction, keyof PermissionFlags> = {
   view: "canView",
   create: "canCreate",
@@ -43,13 +67,40 @@ const actionColumn: Record<RbacAction, keyof PermissionFlags> = {
   export: "canExport",
 };
 
+export function roleAllowsHrdpDepartment(role: AuthUserRole, department: HrdpDepartment): boolean {
+  if (role === "OWNER" || role === "ADMIN") return true;
+  if (department === "RH") return role === "HR";
+  return role === "PAYROLL";
+}
+
+export function roleAllowsHrdpResource(role: AuthUserRole, resource: RbacResource): boolean {
+  if (role === "OWNER" || role === "ADMIN") return true;
+  if (role === "HR") return RH_RESOURCES.has(resource);
+  if (role === "PAYROLL") return DP_RESOURCES.has(resource);
+  return false;
+}
+
+export async function requireHrdpDepartment(department: HrdpDepartment) {
+  const user = await getServerAuthUser();
+  if (!user) throw new Error("Sessão inválida ou expirada.");
+  if (!roleAllowsHrdpDepartment(user.role as AuthUserRole, department)) {
+    throw new Error("Usuário sem permissão para esta área.");
+  }
+  return user;
+}
+
 export async function requirePermission(resource: RbacResource, action: RbacAction) {
   const user = await getServerAuthUser();
   if (!user) {
     throw new Error("Sessão inválida ou expirada.");
   }
 
-  if (user.role === "OWNER" || user.role === "ADMIN") return user;
+  const role = user.role as AuthUserRole;
+  if (!roleAllowsHrdpResource(role, resource)) {
+    throw new Error("Usuário sem permissão para esta operação.");
+  }
+
+  if (role === "OWNER" || role === "ADMIN") return user;
 
   const assignment = await prisma.userAccessProfile.findUnique({
     where: { userId: user.id },

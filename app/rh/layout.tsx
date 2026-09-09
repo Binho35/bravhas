@@ -1,6 +1,20 @@
 import type { ReactNode } from "react";
-import { PeopleShell } from "@/components/hrdp/PeopleShell";
+import { notFound } from "next/navigation";
 
-export default function RhLayout({ children }: { children: ReactNode }) {
+import { PeopleShell } from "@/components/hrdp/PeopleShell";
+import { requireHrdpDepartment } from "@/modules/auth/server/rbac";
+
+function isAccessDenial(error: unknown) {
+  return error instanceof Error && ["Sessão inválida ou expirada.", "Usuário sem permissão para esta área."].includes(error.message);
+}
+
+export default async function RhLayout({ children }: { children: ReactNode }) {
+  try {
+    await requireHrdpDepartment("RH");
+  } catch (error) {
+    if (isAccessDenial(error)) notFound();
+    throw error;
+  }
+
   return <PeopleShell>{children}</PeopleShell>;
 }
