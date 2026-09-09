@@ -4,6 +4,7 @@ import { e2eUsers } from "./fixtures";
 import { closeE2eDb, dbOne } from "./helpers/db";
 
 const COMPANY_ID = "E2E-COMPANY-ALPHA";
+const SAFE_DENIAL_STATUSES = [200, 302, 303, 307, 308, 403, 404] as const;
 
 type CountRow = { count: number };
 type EmployeeRow = { id: string; fullName: string };
@@ -24,7 +25,7 @@ async function expectAllowed(page: Page, path: string) {
 
 async function expectVisualDenied(page: Page, path: string, protectedText: string | RegExp) {
   const response = await page.goto(path);
-  expect(response?.status()).not.toBe(500);
+  expect(SAFE_DENIAL_STATUSES).toContain(response?.status() ?? 0);
   await expect(page.getByText(protectedText, { exact: typeof protectedText === "string" })).toHaveCount(0);
 }
 
