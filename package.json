@@ -14,7 +14,7 @@
     "db:setup": "npm run db:migrate && npm run db:seed",
     "seed": "npm run db:seed",
     "auth:set-password": "prisma generate && tsx scripts/set-user-password.ts",
-    "e2e:seed": "prisma generate && tsx scripts/e2e-seed.ts && tsx scripts/e2e-readiness-fixtures.ts",
+    "e2e:seed": "prisma generate && tsx scripts/e2e-seed.ts && tsx scripts/e2e-homo-005-fixtures.ts && tsx scripts/e2e-readiness-fixtures.ts",
     "recovery:fixture": "tsx scripts/recovery-fixture.ts",
     "recovery:verify": "tsx scripts/recovery-verify.ts",
     "test:unit": "tsx --test tests/unit/*.test.ts",
@@ -23,8 +23,8 @@
     "test:integrity": "tsx scripts/data-integrity-check.ts",
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test tests/e2e/auth.spec.ts --project=chromium",
-    "test:e2e:security": "playwright test tests/e2e/security.spec.ts tests/e2e/readiness-security.spec.ts tests/e2e/financial-cash-flow.spec.ts --project=chromium",
-    "test:e2e:functional": "playwright test tests/e2e/functional-golden-path.spec.ts tests/e2e/document-metadata.spec.ts --project=chromium",
+    "test:e2e:security": "playwright test tests/e2e/security.spec.ts tests/e2e/readiness-security.spec.ts tests/e2e/financial-cash-flow.spec.ts tests/e2e/homo-005-rbac.spec.ts --project=chromium",
+    "test:e2e:functional": "playwright test tests/e2e/functional-golden-path.spec.ts tests/e2e/document-metadata.spec.ts tests/e2e/homo-005-human-path.spec.ts --project=chromium",
     "test:e2e:desktop": "playwright test tests/e2e/product-desktop.spec.ts --project=chromium",
     "test:e2e:mobile": "playwright test tests/e2e/mobile.spec.ts --project=mobile-chromium",
     "prod:preflight": "node scripts/production-preflight.mjs",
@@ -43,7 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
-    "next": "16.3.0",
+    "next": "16.3.4",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -67,7 +67,9 @@
   "overrides": {
     "deepmerge-ts": "^8.0.2",
     "fast-uri": "3.1.7",
+    "js-yaml": "4.3.2",
     "mysql2": "3.23.1",
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "sharp": "0.35.4"
   }
 }

@@ -1,61 +1,33 @@
-import type {
-  Metadata,
-} from "next";
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 
-import {
-  Geist,
-  Geist_Mono,
-} from "next/font/google";
-
-import {
-  AuthGuard,
-} from "@/modules/auth/components/AuthGuard";
+import { AuthGuard } from "@/modules/auth/components/AuthGuard";
+import { AuthProvider } from "@/modules/auth/components/AuthProvider";
 
 import "./globals.css";
 
-const geistSans =
-  Geist({
-    variable:
-      "--font-geist-sans",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
 
-    subsets: [
-      "latin",
-    ],
-  });
-
-const geistMono =
-  Geist_Mono({
-    variable:
-      "--font-geist-mono",
-
-    subsets: [
-      "latin",
-    ],
-  });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title:
-    "BravHAS | Head Administration System",
-
-  description:
-    "Sistema de administração e gestão executiva.",
+  title: "BravHAS | Head Administration System",
+  description: "Sistema de administração e gestão executiva.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children:
-    React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="h-full">
-        <AuthGuard>
-          {children}
-        </AuthGuard>
+        <AuthProvider>
+          <AuthGuard>{children}</AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );

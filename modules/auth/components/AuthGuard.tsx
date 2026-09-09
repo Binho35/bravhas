@@ -1,9 +1,9 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { getCurrentSession } from "../services/getCurrentSession";
+import { useAuth } from "../hooks/useAuth";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -25,68 +25,29 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const previewAllowed = isDevelopmentPreview(pathname);
-  const [checking, setChecking] = useState(true);
-  const [allowed, setAllowed] = useState(false);
+  const { authenticated, loading } = useAuth();
 
   useEffect(() => {
-    let active = true;
-
-    async function validateAccess() {
-      if (pathname === "/login" || previewAllowed) {
-        if (active) {
-          setAllowed(true);
-          setChecking(false);
-        }
-        return;
-      }
-
-      setChecking(true);
-      const { authenticated } = await getCurrentSession();
-
-      if (!active) return;
-
-      if (!authenticated) {
-        setAllowed(false);
-        setChecking(false);
-        router.replace("/login");
-        return;
-      }
-
-      setAllowed(true);
-      setChecking(false);
-    }
-
-    void validateAccess();
-    return () => {
-      active = false;
-    };
-  }, [pathname, previewAllowed, router]);
+    if (pathname === "/login" || previewAllowed || loading) return;
+    if (!authenticated) router.replace("/login");
+  }, [authenticated, loading, pathname, previewAllowed, router]);
 
   if (pathname === "/login" || previewAllowed) {
     return children;
   }
 
-  if (checking) {
+  if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F9FC]">
         <div className="rounded-2xl border border-[#E2E8F0] bg-white px-8 py-7 text-center shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">
-            BravHAS
-          </p>
-          <h2 className="mt-2 text-lg font-bold text-[#0B2947]">
-            Validando acesso...
-          </h2>
-          <p className="mt-2 text-sm text-[#64748B]">
-            Verificando sua sessão.
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">BravHAS</p>
+          <h2 className="mt-2 text-lg font-bold text-[#0B2947]">Validando acesso...</h2>
+          <p className="mt-2 text-sm text-[#64748B]">Verificando sua sessão.</p>
         </div>
       </main>
     );
   }
 
-  if (!allowed) {
-    return null;
-  }
-
+  if (!authenticated) return null;
   return children;
 }

@@ -7,6 +7,7 @@ import { ServerSubmitButton } from "@/components/forms/ServerSubmitButton";
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
+import { cpfDuplicateCandidates, requireValidCpf } from "@/modules/hrdp/domain/cpf";
 
 const EMPLOYMENT_TYPES = new Set(["CLT", "EXPERIENCE", "INTERN", "APPRENTICE", "CONTRACTOR", "TEMPORARY", "OTHER"]);
 const WORK_MODES = new Set(["ONSITE", "HYBRID", "REMOTE"]);
@@ -38,7 +39,7 @@ async function createEmployee(formData: FormData) {
   const actor = await hrdpPermission.colaboradores("create");
 
   const fullName = text(formData, "fullName");
-  const cpf = text(formData, "cpf");
+  const cpfInput = text(formData, "cpf");
   const hireDate = dateValue(formData, "hireDate");
   const employmentType = text(formData, "employmentType");
   const workMode = text(formData, "workMode");
@@ -49,7 +50,8 @@ async function createEmployee(formData: FormData) {
   const managerId = text(formData, "managerId");
 
   if (!fullName) throw new Error("Nome completo é obrigatório.");
-  if (!cpf) throw new Error("CPF é obrigatório para iniciar a admissão.");
+  if (!cpfInput) throw new Error("CPF é obrigatório para iniciar a admissão.");
+  const cpf = requireValidCpf(cpfInput);
   if (!hireDate) throw new Error("Data de admissão é obrigatória para iniciar a admissão.");
   if (!employmentType || !EMPLOYMENT_TYPES.has(employmentType)) throw new Error("Tipo de contrato é obrigatório para iniciar a admissão.");
   if (workMode && !WORK_MODES.has(workMode)) throw new Error("Regime de trabalho inválido.");
@@ -89,7 +91,10 @@ async function createEmployee(formData: FormData) {
       if (!manager) throw new Error("Gestor inválido ou fora do escopo autorizado.");
     }
 
-    const duplicateCpf = await tx.hrEmployee.findFirst({ where: { companyId: actor.companyId, cpf }, select: { id: true } });
+    const duplicateCpf = await tx.hrEmployee.findFirst({
+      where: { companyId: actor.companyId, cpf: { in: cpfDuplicateCandidates(cpf) } },
+      select: { id: true },
+    });
     if (duplicateCpf) throw new Error("CPF já cadastrado para outro colaborador desta empresa.");
     if (employeeNumber) {
       const duplicateNumber = await tx.hrEmployee.findFirst({ where: { companyId: actor.companyId, employeeNumber }, select: { id: true } });
@@ -170,11 +175,11 @@ export default async function NewEmployeePage() {
 
       <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><BriefcaseBusiness className="h-5 w-5" /></div><div><h2 className="font-bold">Vínculo e contrato</h2><p className="text-xs text-slate-500">Dados admissionais, remuneração e jornada contratada.</p></div></div><div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3"><Field name="hireDate" label="Data de admissão" placeholder="" type="date" required /><SelectField name="employmentType" label="Tipo de contrato" required><option value="">Selecione</option><option value="CLT">CLT</option><option value="EXPERIENCE">Experiência</option><option value="INTERN">Estágio</option><option value="APPRENTICE">Aprendiz</option><option value="CONTRACTOR">Prestador</option><option value="TEMPORARY">Temporário</option><option value="OTHER">Outro</option></SelectField><Field name="employeeNumber" label="Matrícula" placeholder="Código interno" /><Field name="baseSalary" label="Salário base" placeholder="0,00" /><Field name="weeklyHours" label="Carga horária semanal" placeholder="44" /><SelectField name="workMode" label="Regime de trabalho"><option value="">Selecione</option><option value="ONSITE">Presencial</option><option value="HYBRID">Híbrido</option><option value="REMOTE">Remoto</option></SelectField><label className="block"><span className="text-xs font-semibold text-slate-600">Situação inicial</span><div className="mt-2 flex h-11 items-center rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700">Pré-admissão</div></label></div></section>
 
-      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><Building2 className="h-5 w-5" /></div><div><h2 className="font-bold">Estrutura organizacional</h2><p className="text-xs text-slate-500">Posição do colaborador na empresa e cadeia de liderança.</p></div></div><div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3"><SelectField name="branchId" label="Unidade"><option value="">Sem unidade definida</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="departmentId" label="Departamento"><option value="">Sem departamento definido</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="positionId" label="Cargo"><option value="">Sem cargo definido</option>{positions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="managerId" label="Gestor imediato"><option value="">Sem gestor definido</option>{managers.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}</SelectField></div></section>
+      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><Building2 className="h-5 w-5" /></div><div><h2 className="font-bold">Estrutura organizacional</h2><p className="text-xs text-slate-500">Unidade, departamento, cargo e liderança.</p></div></div><div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4"><SelectField name="branchId" label="Unidade"><option value="">Sem unidade definida</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="departmentId" label="Departamento"><option value="">Sem departamento definido</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="positionId" label="Cargo"><option value="">Sem cargo definido</option>{positions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField><SelectField name="managerId" label="Gestor imediato"><option value="">Sem gestor definido</option>{managers.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}</SelectField></div></section>
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_360px]"><article className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3"><FileText className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold">Observações</h2><p className="text-xs text-slate-500">Informações complementares para conferência do RH/DP.</p></div></div><label className="mt-5 block"><span className="text-xs font-semibold text-slate-600">Observações internas</span><textarea name="notes" rows={5} placeholder="Registre apenas informações necessárias ao processo de RH/DP." className="mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-50" /></label></article><aside className="rounded-3xl border border-blue-100 bg-[#eef6fc] p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-sm"><BadgeCheck className="h-5 w-5" /></div><h3 className="mt-4 font-bold text-[#0b2947]">O que acontece ao salvar?</h3><p className="mt-2 text-sm leading-6 text-slate-600">O colaborador entra em pré-admissão e você será levado automaticamente para a etapa de documentos. Depois da conferência, a tela de Admissões libera a ativação.</p></aside></section>
+      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)] md:p-7"><div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><FileText className="h-5 w-5" /></div><div><h2 className="font-bold">Observações</h2><p className="text-xs text-slate-500">Contexto adicional sem substituir documentos do dossiê.</p></div></div><textarea name="notes" rows={4} placeholder="Observações admissionais" className="mt-6 w-full rounded-2xl border border-slate-200 p-4 text-sm outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-50" /></section>
 
-      <div className="flex flex-col-reverse justify-end gap-3 pb-8 sm:flex-row"><Link href="/rh/colaboradores" className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-600">Cancelar</Link><ServerSubmitButton pendingLabel="Salvando colaborador..." className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/10 transition hover:bg-[#154b7a]"><Save className="h-4 w-4" />Salvar e continuar para documentos</ServerSubmitButton></div>
+      <div className="flex flex-col justify-between gap-3 rounded-3xl border border-blue-100 bg-blue-50/60 p-5 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><BadgeCheck className="mt-0.5 h-5 w-5 text-[#154b7a]" /><div><p className="text-sm font-bold text-[#0b2947]">Próxima etapa: documentos</p><p className="mt-1 text-xs leading-5 text-slate-600">O colaborador será criado em pré-admissão. Depois anexe e confira os documentos antes da ativação.</p></div></div><ServerSubmitButton idleLabel="Salvar e continuar para documentos" pendingLabel="Salvando colaborador..." className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-6 text-sm font-semibold text-white transition hover:bg-[#123d64] disabled:cursor-wait disabled:opacity-60"><Save className="h-4 w-4" /></ServerSubmitButton></div>
     </form>
   </div></main>;
 }

@@ -5,10 +5,12 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME } from "../constants";
 import type { AuthUserRole } from "../types/AuthUser";
+import { shouldTouchSession } from "./sessionPolicy";
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
 export { SESSION_COOKIE_NAME } from "../constants";
+export { SESSION_TOUCH_INTERVAL_MS, shouldTouchSession } from "./sessionPolicy";
 export const HRDP_ALLOWED_ROLES: AuthUserRole[] = ["OWNER", "ADMIN", "HR", "PAYROLL"];
 
 export function hashSessionToken(token: string) {
@@ -27,14 +29,17 @@ export async function getServerAuthSession() {
     include: { user: true },
   });
 
-  if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.active) {
+  const now = new Date();
+  if (!session || session.revokedAt || session.expiresAt <= now || !session.user.active) {
     return null;
   }
 
-  await prisma.userSession.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
+  if (shouldTouchSession(session.lastSeenAt, now)) {
+    await prisma.userSession.update({
+      where: { id: session.id },
+      data: { lastSeenAt: now },
+    });
+  }
 
   return session;
 }

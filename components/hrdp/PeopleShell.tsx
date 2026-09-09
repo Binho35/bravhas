@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
   BadgeCheck,
   Bell,
   BriefcaseBusiness,
@@ -27,6 +28,9 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+
+import { useAuth } from "@/modules/auth/hooks/useAuth";
+import type { AuthUserRole } from "@/modules/auth/types/AuthUser";
 
 const rhNavigation = [
   { label: "Visão geral", href: "/pessoas", icon: LayoutDashboard },
@@ -85,21 +89,39 @@ function NavigationGroup({ title, items, pathname, onNavigate }: { title: string
   );
 }
 
-function NavigationContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function roleNavigation(role: AuthUserRole | undefined) {
+  const global = role === "OWNER" || role === "ADMIN";
+  return {
+    showRh: global || role === "HR",
+    showDp: global || role === "PAYROLL",
+    showGlobalReturn: global,
+    homeHref: global ? "/pessoas" : role === "PAYROLL" ? "/dp" : role === "HR" ? "/rh" : "/",
+    areaLabel: global ? "RH & DP" : role === "PAYROLL" ? "Departamento Pessoal" : role === "HR" ? "Recursos Humanos" : "Acesso restrito",
+    badge: global ? "ADM" : role === "PAYROLL" ? "DP" : role === "HR" ? "RH" : "—",
+  };
+}
+
+function NavigationContent({ pathname, onNavigate, role }: { pathname: string; onNavigate?: () => void; role?: AuthUserRole }) {
+  const navigation = roleNavigation(role);
   return (
     <>
       <div className="border-b border-white/10 px-6 py-6">
-        <Link href="/pessoas" onClick={onNavigate} className="flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+        <Link href={navigation.homeHref} onClick={onNavigate} className="flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#154b7a] shadow-lg shadow-black/10"><Building2 className="h-5 w-5" aria-hidden="true" /></div>
           <div><p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-200">BravHAS</p><p className="mt-1 text-base font-bold">Pessoas</p></div>
         </Link>
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
-        <NavigationGroup title="Recursos Humanos" items={rhNavigation} pathname={pathname} onNavigate={onNavigate} />
-        <div className="h-px bg-white/10" />
-        <NavigationGroup title="Departamento Pessoal" items={dpNavigation} pathname={pathname} onNavigate={onNavigate} />
+        {navigation.showRh ? <NavigationGroup title="Recursos Humanos" items={rhNavigation} pathname={pathname} onNavigate={onNavigate} /> : null}
+        {navigation.showRh && navigation.showDp ? <div className="h-px bg-white/10" /> : null}
+        {navigation.showDp ? <NavigationGroup title="Departamento Pessoal" items={dpNavigation} pathname={pathname} onNavigate={onNavigate} /> : null}
       </div>
-      <div className="p-4">
+      <div className="space-y-3 p-4">
+        {navigation.showGlobalReturn ? (
+          <Link href="/" onClick={onNavigate} className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />Voltar ao Centro de Controle
+          </Link>
+        ) : null}
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
           <div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden="true" />Ambiente corporativo</div>
           <p className="mt-2 text-xs leading-5 text-slate-400">Acessos por perfil, trilha de auditoria e proteção de dados sensíveis.</p>
@@ -111,6 +133,8 @@ function NavigationContent({ pathname, onNavigate }: { pathname: string; onNavig
 
 export function PeopleShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const navigation = roleNavigation(user?.role);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigationId = useId();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -154,7 +178,7 @@ export function PeopleShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
       <div className="mx-auto flex min-h-screen max-w-[1680px]">
         <aside className="hidden w-[286px] shrink-0 border-r border-white/10 bg-[#071d33] text-white xl:flex xl:flex-col">
-          <NavigationContent pathname={pathname} />
+          <NavigationContent pathname={pathname} role={user?.role} />
         </aside>
 
         {mobileMenuOpen ? (
@@ -162,7 +186,7 @@ export function PeopleShell({ children }: { children: ReactNode }) {
             <button type="button" aria-label="Fechar navegação de Pessoas" onClick={() => setMobileMenuOpen(false)} className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]" />
             <aside ref={drawerRef} id={navigationId} role="dialog" aria-modal="true" aria-label="Navegação de RH e Departamento Pessoal" className="relative flex h-full w-[min(21rem,90vw)] flex-col bg-[#071d33] text-white shadow-2xl">
               <button ref={closeButtonRef} type="button" aria-label="Fechar menu de Pessoas" onClick={() => setMobileMenuOpen(false)} className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"><X className="h-5 w-5" aria-hidden="true" /></button>
-              <NavigationContent pathname={pathname} onNavigate={() => setMobileMenuOpen(false)} />
+              <NavigationContent pathname={pathname} role={user?.role} onNavigate={() => setMobileMenuOpen(false)} />
             </aside>
           </div>
         ) : null}
@@ -175,11 +199,11 @@ export function PeopleShell({ children }: { children: ReactNode }) {
                 <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-700">BravHAS</p><p className="truncate text-sm font-bold text-slate-900">Pessoas</p></div>
               </div>
 
-              <div className="hidden md:block"><p className="text-xs font-medium text-slate-500">BravHAS · ambiente multiempresa</p><p className="mt-0.5 text-sm font-semibold text-slate-900">Central de RH & Departamento Pessoal</p></div>
+              <div className="hidden md:block"><p className="text-xs font-medium text-slate-500">BravHAS · ambiente multiempresa</p><p className="mt-0.5 text-sm font-semibold text-slate-900">{navigation.areaLabel}</p></div>
 
               <div className="flex shrink-0 items-center gap-2">
                 <button type="button" aria-label="Notificações" className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/40"><Bell className="h-[18px] w-[18px]" aria-hidden="true" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden="true" /></button>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:px-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#eaf3fb] text-xs font-bold text-[#0b2947]">RH</div><div className="hidden sm:block"><p className="text-xs font-semibold text-slate-900">Administração</p><p className="text-[11px] text-slate-500">RH & DP</p></div></div>
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:px-3"><div className="flex h-8 min-w-8 items-center justify-center rounded-xl bg-[#eaf3fb] px-2 text-xs font-bold text-[#0b2947]">{navigation.badge}</div><div className="hidden sm:block"><p className="text-xs font-semibold text-slate-900">{user?.name ?? "Usuário"}</p><p className="text-[11px] text-slate-500">{navigation.areaLabel}</p></div></div>
               </div>
             </div>
           </header>
