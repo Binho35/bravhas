@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { assertEmployeeScope } from "@/modules/auth/server/rbacPolicy";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
+import { cpfDuplicateCandidates, requireValidCpf } from "@/modules/hrdp/domain/cpf";
 
 const EMPLOYMENT_TYPES = new Set(["CLT", "EXPERIENCE", "INTERN", "APPRENTICE", "CONTRACTOR", "TEMPORARY", "OTHER"]);
 const WORK_MODES = new Set(["ONSITE", "HYBRID", "REMOTE"]);
@@ -49,12 +50,13 @@ async function updateEmployee(employeeId: string, formData: FormData) {
   await assertEmployeeScope(employeeId);
 
   const fullName = text(formData, "fullName");
-  const cpf = text(formData, "cpf");
+  const cpfInput = text(formData, "cpf");
   const hireDate = requiredDate(formData, "hireDate", "Data de admissão é obrigatória.");
   const employmentType = text(formData, "employmentType");
   const workMode = text(formData, "workMode");
   if (!fullName) throw new Error("Nome completo é obrigatório.");
-  if (!cpf) throw new Error("CPF é obrigatório.");
+  if (!cpfInput) throw new Error("CPF é obrigatório.");
+  const cpf = requireValidCpf(cpfInput);
   if (!employmentType || !EMPLOYMENT_TYPES.has(employmentType)) throw new Error("Tipo de contrato inválido.");
   if (workMode && !WORK_MODES.has(workMode)) throw new Error("Regime de trabalho inválido.");
 
@@ -103,7 +105,10 @@ async function updateEmployee(employeeId: string, formData: FormData) {
       if (!manager) throw new Error("Gestor inválido ou fora do escopo autorizado.");
     }
 
-    const duplicateCpf = await tx.hrEmployee.findFirst({ where: { companyId: actor.companyId, cpf, id: { not: employeeId } }, select: { id: true } });
+    const duplicateCpf = await tx.hrEmployee.findFirst({
+      where: { companyId: actor.companyId, cpf: { in: cpfDuplicateCandidates(cpf) }, id: { not: employeeId } },
+      select: { id: true },
+    });
     if (duplicateCpf) throw new Error("CPF já cadastrado para outro colaborador desta empresa.");
     if (employeeNumber) {
       const duplicateNumber = await tx.hrEmployee.findFirst({ where: { companyId: actor.companyId, employeeNumber, id: { not: employeeId } }, select: { id: true } });

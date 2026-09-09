@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { assertEmployeeScope, getEmployeeScopeWhere } from "@/modules/auth/server/rbacPolicy";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
+import { ACTIVE_EMPLOYEE_STATUSES, employeeEligibilityByIdWhere, employeeEligibilityStateWhere } from "@/modules/hrdp/workflows/employeeEligibility";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -20,6 +21,11 @@ async function createVacation(formData: FormData) {
   if (!employeeId || !startDate || !endDate) throw new Error("Colaborador, início e fim são obrigatórios.");
 
   await assertEmployeeScope(employeeId);
+  const eligibleEmployee = await prisma.hrEmployee.findFirst({
+    where: employeeEligibilityByIdWhere(actor.companyId, employeeId, ACTIVE_EMPLOYEE_STATUSES),
+    select: { id: true },
+  });
+  if (!eligibleEmployee) throw new Error("Colaborador ainda não está elegível para férias.");
 
   const start = new Date(`${startDate}T12:00:00`);
   const end = new Date(`${endDate}T12:00:00`);
@@ -120,7 +126,7 @@ export default async function VacationsPage() {
   in30Days.setDate(in30Days.getDate() + 30);
 
   const employees = await prisma.hrEmployee.findMany({
-    where: { ...employeeScope, status: "ACTIVE", active: true },
+    where: { ...employeeScope, ...employeeEligibilityStateWhere(ACTIVE_EMPLOYEE_STATUSES) },
     orderBy: { fullName: "asc" },
     select: { id: true, fullName: true, employeeNumber: true },
   });
