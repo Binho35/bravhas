@@ -1,8 +1,10 @@
 import { revalidatePath } from "next/cache";
+import { notFound } from "next/navigation";
 import { BadgeCheck, CalendarClock, CalendarDays, Clock3, Palmtree, Plus } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
+import type { RbacAction } from "@/modules/auth/server/rbac";
 import { assertEmployeeScope, getEmployeeScopeWhere } from "@/modules/auth/server/rbacPolicy";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
 import { ACTIVE_EMPLOYEE_STATUSES, employeeEligibilityByIdWhere, employeeEligibilityStateWhere } from "@/modules/hrdp/workflows/employeeEligibility";
@@ -12,9 +14,23 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function isAccessDenial(error: unknown) {
+  return error instanceof Error && ["Sessão inválida ou expirada.", "Usuário sem permissão para esta operação."].includes(error.message);
+}
+
+async function authorizeVacation(action: RbacAction) {
+  try {
+    return await hrdpPermission.ferias(action);
+  } catch (error) {
+    if (isAccessDenial(error)) return null;
+    throw error;
+  }
+}
+
 async function createVacation(formData: FormData) {
   "use server";
-  const actor = await hrdpPermission.ferias("create");
+  const actor = await authorizeVacation("create");
+  if (!actor) return;
   const employeeId = text(formData, "employeeId");
   const startDate = text(formData, "startDate");
   const endDate = text(formData, "endDate");
@@ -66,7 +82,8 @@ async function reviewVacation(formData: FormData) {
   if (!decision || !["APPROVED", "REJECTED", "CANCELED", "COMPLETED"].includes(decision)) throw new Error("Decisão inválida.");
 
   const permissionAction = decision === "COMPLETED" ? "edit" : "approve";
-  const actor = await hrdpPermission.ferias(permissionAction);
+  const actor = await authorizeVacation(permissionAction);
+  if (!actor) return;
   const id = text(formData, "id");
   const employeeId = text(formData, "employeeId");
   if (!id || !employeeId) throw new Error("Solicitação inválida.");
@@ -119,7 +136,7 @@ const statusClass: Record<string, string> = {
 };
 
 export default async function VacationsPage() {
-  await hrdpPermission.ferias("view");
+  if (!(await authorizeVacation("view"))) notFound();
   const employeeScope = await getEmployeeScopeWhere();
   const now = new Date();
   const in30Days = new Date(now);
@@ -160,21 +177,16 @@ export default async function VacationsPage() {
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[430px_1fr]">
           <form action={createVacation} className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]" aria-hidden="true"><Plus className="h-5 w-5" /></div><div><h2 className="font-bold text-[#0b2947]">Programar férias</h2><p className="text-xs text-slate-500">Crie uma solicitação para análise do DP.</p></div></div>
-            <div className="mt-5 space-y-4">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]" aria-hidden="true"><Plus className="h-5 w-5" /></div><div><h2 className="font-bold text-[#0b2947]">Programar férias</h2><p className="text-xs text-slate-500">Crie uma solicitação para análise do DP.</p></div></div><div className="mt-5 space-y-4">
               <label className="block"><span className="text-xs font-semibold text-slate-600">Colaborador *</span><select name="employeeId" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10"><option value="">Selecione</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.employeeNumber ? ` · ${item.employeeNumber}` : ""}</option>)}</select></label>
               <div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="text-xs font-semibold text-slate-600">Início *</span><input name="startDate" type="date" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label><label className="block"><span className="text-xs font-semibold text-slate-600">Fim *</span><input name="endDate" type="date" required className="mt-2 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label></div>
               <label className="block"><span className="text-xs font-semibold text-slate-600">Dias de abono</span><input name="sellDays" type="number" min="0" max="10" defaultValue="0" className="mt-2 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label>
               <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700"><input name="advance13th" type="checkbox" className="h-4 w-4 rounded" />Solicitar adiantamento do 13º</label>
               <label className="block"><span className="text-xs font-semibold text-slate-600">Observações</span><textarea name="notes" rows={3} placeholder="Informações relevantes para análise." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-[#154b7a] focus:ring-2 focus:ring-[#154b7a]/10" /></label>
               <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#0b2947] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154b7a]/40"><CalendarDays className="h-4 w-4" aria-hidden="true" />Registrar programação</button>
-            </div>
-          </form>
+            </div></form>
 
-          <article className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">Agenda</p><h2 className="mt-1 text-lg font-bold text-[#0b2947]">Programações e solicitações</h2></div><CalendarDays className="h-5 w-5 text-[#154b7a]" aria-hidden="true" /></div>
-            {requests.length === 0 ? <div className="px-6 py-14 text-center"><Palmtree className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" /><p className="mt-4 font-semibold text-slate-700">Nenhuma programação registrada no escopo autorizado</p></div> : <div className="divide-y divide-slate-100">{requests.map((item) => <div key={item.id} className="p-5"><div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_180px_120px_130px] md:items-center"><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><div><p className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.startDate)} → {new Intl.DateTimeFormat("pt-BR").format(item.endDate)}</p><p className="mt-1 text-xs text-slate-400">Abono: {item.sellDays} dia(s)</p></div><span className="text-xs text-slate-500">13º: {item.advance13th ? "Sim" : "Não"}</span><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{statusLabel[item.status] ?? item.status}</span></div>{item.status === "PENDING" ? <form action={reviewVacation} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-2"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><button name="decision" value="APPROVED" className="min-h-10 rounded-xl bg-emerald-600 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40">Aprovar</button><button name="decision" value="REJECTED" className="min-h-10 rounded-xl bg-rose-600 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600/40">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-slate-400"><span>Aprovado por: {item.approvedBy ?? "—"}</span><span>Em: {item.approvedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.approvedAt) : "—"}</span>{item.status === "APPROVED" ? <form action={reviewVacation}><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><button name="decision" value="COMPLETED" className="text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40">Marcar concluída</button></form> : null}</div>}</div>)}</div>}
-          </article>
+          <article className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]"><div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#154b7a]">Agenda</p><h2 className="mt-1 text-lg font-bold text-[#0b2947]">Programações e solicitações</h2></div><CalendarDays className="h-5 w-5 text-[#154b7a]" aria-hidden="true" /></div>{requests.length === 0 ? <div className="px-6 py-14 text-center"><Palmtree className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" /><p className="mt-4 font-semibold text-slate-700">Nenhuma programação registrada no escopo autorizado</p></div> : <div className="divide-y divide-slate-100">{requests.map((item) => <div key={item.id} className="p-5"><div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_180px_120px_130px] md:items-center"><div><p className="text-sm font-semibold text-slate-800">{item.employee.fullName}</p><p className="mt-1 text-xs text-slate-400">{item.employee.employeeNumber ?? "Sem matrícula"}</p></div><div><p className="text-xs font-medium text-slate-500">{new Intl.DateTimeFormat("pt-BR").format(item.startDate)} → {new Intl.DateTimeFormat("pt-BR").format(item.endDate)}</p><p className="mt-1 text-xs text-slate-400">Abono: {item.sellDays} dia(s)</p></div><span className="text-xs text-slate-500">13º: {item.advance13th ? "Sim" : "Não"}</span><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusClass[item.status] ?? statusClass.PENDING}`}>{statusLabel[item.status] ?? item.status}</span></div>{item.status === "PENDING" ? <form action={reviewVacation} className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-2"><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><button name="decision" value="APPROVED" className="min-h-10 rounded-xl bg-emerald-600 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40">Aprovar</button><button name="decision" value="REJECTED" className="min-h-10 rounded-xl bg-rose-600 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600/40">Rejeitar</button></form> : <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-slate-400"><span>Aprovado por: {item.approvedBy ?? "—"}</span><span>Em: {item.approvedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.approvedAt) : "—"}</span>{item.status === "APPROVED" ? <form action={reviewVacation}><input type="hidden" name="id" value={item.id} /><input type="hidden" name="employeeId" value={item.employee.id} /><button name="decision" value="COMPLETED" className="text-xs font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40">Marcar concluída</button></form> : null}</div>}</div>)}</div>}</article>
         </section>
       </div>
     </main>
