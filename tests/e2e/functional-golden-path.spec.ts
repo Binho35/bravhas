@@ -120,7 +120,7 @@ test("functional golden path closes master data, employee admission, history, ob
   const positionName = `${positionOriginal} Editado`;
   const employeeName = unique("Colaborador");
   const employeeEditedName = `${employeeName} Editado`;
-  const cpf = `E2E-CPF-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const cpf = "52998224725";
   const obligationTitle = unique("Obrigação Agenda");
   const obligationEditedTitle = `${obligationTitle} Editada`;
 
