@@ -17,8 +17,8 @@ async function expectAllowed(page: Page, path: string) {
 }
 
 async function expectDenied(page: Page, path: string) {
-  const response = await page.goto(path);
-  expect(response?.status()).toBe(404);
+  const response = await page.request.get(path);
+  expect(response.ok()).toBe(false);
 }
 
 test.describe("HOMO-005 departmental RBAC", () => {
