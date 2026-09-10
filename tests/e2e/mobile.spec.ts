@@ -45,7 +45,7 @@ test.describe("mobile product smoke", () => {
     await expectNoSevereHorizontalOverflow(page);
   });
 
-  test("session request fan-out is measured across mobile load and navigation", async ({ page }) => {
+  test("session request fan-out stays at one request per mobile route transition", async ({ page }) => {
     await loginThroughApi(page);
 
     let phase: "initial" | "navigation" = "initial";
@@ -74,8 +74,8 @@ test.describe("mobile product smoke", () => {
     console.log(`PERF_SESSION_MOBILE_NAVIGATION_REQUESTS=${navigationSessionRequests}`);
     console.log(`PERF_SESSION_MOBILE_TOTAL_REQUESTS=${initialSessionRequests + navigationSessionRequests}`);
 
-    expect(initialSessionRequests).toBeGreaterThan(1);
-    expect(navigationSessionRequests).toBeGreaterThan(1);
+    expect(initialSessionRequests).toBe(1);
+    expect(navigationSessionRequests).toBe(1);
   });
 
   test("financial and cash-flow mobile surfaces use session-scoped APIs and remain navigable", async ({ page }) => {
