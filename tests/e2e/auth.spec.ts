@@ -3,10 +3,14 @@ import { execFileSync } from "node:child_process";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { closeE2eDb, dbOne } from "./helpers/db";
+
 const alpha = {
   login: "e2eAlphaOwner",
   password: "E2E-Alpha-2026!Secure",
 };
+
+type LastSeenRow = { lastSeenAt: string | null };
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -43,6 +47,10 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
+  test.afterEach(async () => {
+    await closeE2eDb();
+  });
+
   test("security headers are emitted on application responses", async ({ page }) => {
     const response = await page.request.get("/login");
     expect(response.ok()).toBe(true);
@@ -139,6 +147,32 @@ test.describe("authenticated session lifecycle", () => {
 
     expect(initialSessionRequests).toBe(1);
     expect(navigationSessionRequests).toBe(1);
+  });
+
+  test("repeated session validations do not rewrite lastSeen inside the throttle window", async ({ page, context }) => {
+    await loginThroughApi(page);
+    const cookie = (await context.cookies()).find((item) => item.name === "bravhas_session");
+    expect(cookie?.value).toBeTruthy();
+    const tokenHash = hashToken(cookie!.value);
+
+    const before = await dbOne<LastSeenRow>(
+      `SELECT "lastSeenAt"::text AS "lastSeenAt" FROM "UserSession" WHERE "tokenHash" = $1`,
+      [tokenHash],
+    );
+    expect(before?.lastSeenAt).toBeTruthy();
+
+    const first = await page.request.get("/api/auth/session");
+    const second = await page.request.get("/api/auth/session");
+    expect(first.ok()).toBe(true);
+    expect(second.ok()).toBe(true);
+
+    const after = await dbOne<LastSeenRow>(
+      `SELECT "lastSeenAt"::text AS "lastSeenAt" FROM "UserSession" WHERE "tokenHash" = $1`,
+      [tokenHash],
+    );
+
+    console.log(`PERF_SESSION_TOUCH_UNCHANGED=${before?.lastSeenAt === after?.lastSeenAt}`);
+    expect(after?.lastSeenAt).toBe(before?.lastSeenAt);
   });
 
   test("logout revokes session and protected navigation returns to login", async ({ page }) => {
