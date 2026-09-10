@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshSequence = useRef(0);
+  const validatedPath = useRef<string | null>(null);
 
   const refreshSession = useCallback(async () => {
     const sequence = refreshSequence.current + 1;
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (validatedPath.current === pathname) return;
+    validatedPath.current = pathname;
     void refreshSession();
   }, [pathname, refreshSession]);
 
