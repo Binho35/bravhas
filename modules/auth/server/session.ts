@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME } from "../constants";
 import type { AuthUserRole } from "../types/AuthUser";
+import { shouldTouchSession } from "./sessionPolicy";
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
@@ -26,15 +27,18 @@ export async function getServerAuthSession() {
     where: { tokenHash },
     include: { user: true },
   });
+  const now = new Date();
 
-  if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.active) {
+  if (!session || session.revokedAt || session.expiresAt <= now || !session.user.active) {
     return null;
   }
 
-  await prisma.userSession.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
+  if (shouldTouchSession(session.lastSeenAt, now)) {
+    await prisma.userSession.update({
+      where: { id: session.id },
+      data: { lastSeenAt: now },
+    });
+  }
 
   return session;
 }

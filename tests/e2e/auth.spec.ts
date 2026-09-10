@@ -3,10 +3,14 @@ import { execFileSync } from "node:child_process";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { closeE2eDb, dbOne } from "./helpers/db";
+
 const alpha = {
   login: "e2eAlphaOwner",
   password: "E2E-Alpha-2026!Secure",
 };
+
+type LastSeenRow = { lastSeenAt: string | null };
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -14,6 +18,16 @@ async function login(page: Page) {
   await page.getByLabel("Senha").fill(alpha.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
+}
+
+async function loginThroughApi(page: Page) {
+  const response = await page.request.post("/api/auth/login", {
+    data: {
+      loginId: alpha.login,
+      password: alpha.password,
+    },
+  });
+  expect(response.ok()).toBe(true);
 }
 
 function hashToken(token: string) {
@@ -33,6 +47,10 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
+  test.afterEach(async () => {
+    await closeE2eDb();
+  });
+
   test("security headers are emitted on application responses", async ({ page }) => {
     const response = await page.request.get("/login");
     expect(response.ok()).toBe(true);
@@ -97,6 +115,64 @@ test.describe("authenticated session lifecycle", () => {
     expect(sessionCookie).toBeTruthy();
     expect(sessionCookie?.httpOnly).toBe(true);
     expect(sessionCookie?.sameSite).toBe("Lax");
+  });
+
+  test("session request fan-out stays at one request per desktop route transition", async ({ page }) => {
+    await loginThroughApi(page);
+
+    let phase: "initial" | "navigation" = "initial";
+    let initialSessionRequests = 0;
+    let navigationSessionRequests = 0;
+
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() !== "GET" || url.pathname !== "/api/auth/session") return;
+      if (phase === "initial") initialSessionRequests += 1;
+      else navigationSessionRequests += 1;
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+
+    phase = "navigation";
+    await page.getByRole("link", { name: "Financeiro", exact: true }).click();
+    await expect(page).toHaveURL(/\/financeiro$/);
+    await expect(page.getByRole("heading", { name: "Financeiro", exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+
+    console.log(`PERF_SESSION_DESKTOP_INITIAL_REQUESTS=${initialSessionRequests}`);
+    console.log(`PERF_SESSION_DESKTOP_NAVIGATION_REQUESTS=${navigationSessionRequests}`);
+    console.log(`PERF_SESSION_DESKTOP_TOTAL_REQUESTS=${initialSessionRequests + navigationSessionRequests}`);
+
+    expect(initialSessionRequests).toBe(1);
+    expect(navigationSessionRequests).toBe(1);
+  });
+
+  test("repeated session validations do not rewrite lastSeen inside the throttle window", async ({ page, context }) => {
+    await loginThroughApi(page);
+    const cookie = (await context.cookies()).find((item) => item.name === "bravhas_session");
+    expect(cookie?.value).toBeTruthy();
+    const tokenHash = hashToken(cookie!.value);
+
+    const before = await dbOne<LastSeenRow>(
+      `SELECT "lastSeenAt"::text AS "lastSeenAt" FROM "UserSession" WHERE "tokenHash" = $1`,
+      [tokenHash],
+    );
+    expect(before?.lastSeenAt).toBeTruthy();
+
+    const first = await page.request.get("/api/auth/session");
+    const second = await page.request.get("/api/auth/session");
+    expect(first.ok()).toBe(true);
+    expect(second.ok()).toBe(true);
+
+    const after = await dbOne<LastSeenRow>(
+      `SELECT "lastSeenAt"::text AS "lastSeenAt" FROM "UserSession" WHERE "tokenHash" = $1`,
+      [tokenHash],
+    );
+
+    console.log(`PERF_SESSION_TOUCH_UNCHANGED=${before?.lastSeenAt === after?.lastSeenAt}`);
+    expect(after?.lastSeenAt).toBe(before?.lastSeenAt);
   });
 
   test("logout revokes session and protected navigation returns to login", async ({ page }) => {

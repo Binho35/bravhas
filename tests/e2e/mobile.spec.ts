@@ -13,6 +13,16 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/$/);
 }
 
+async function loginThroughApi(page: Page) {
+  const response = await page.request.post("/api/auth/login", {
+    data: {
+      loginId: alpha.login,
+      password: alpha.password,
+    },
+  });
+  expect(response.ok()).toBe(true);
+}
+
 async function expectNoSevereHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(2);
@@ -33,6 +43,39 @@ test.describe("mobile product smoke", () => {
     await expect(page).toHaveURL(/\/obrigacoes$/);
     await expect(page.getByRole("heading", { name: "Obrigações", exact: true })).toBeVisible();
     await expectNoSevereHorizontalOverflow(page);
+  });
+
+  test("session request fan-out stays at one request per mobile route transition", async ({ page }) => {
+    await loginThroughApi(page);
+
+    let phase: "initial" | "navigation" = "initial";
+    let initialSessionRequests = 0;
+    let navigationSessionRequests = 0;
+
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() !== "GET" || url.pathname !== "/api/auth/session") return;
+      if (phase === "initial") initialSessionRequests += 1;
+      else navigationSessionRequests += 1;
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+
+    phase = "navigation";
+    await page.getByRole("button", { name: "Abrir menu de navegação" }).click();
+    await page.getByRole("link", { name: "Obrigações", exact: true }).click();
+    await expect(page).toHaveURL(/\/obrigacoes$/);
+    await expect(page.getByRole("heading", { name: "Obrigações", exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+
+    console.log(`PERF_SESSION_MOBILE_INITIAL_REQUESTS=${initialSessionRequests}`);
+    console.log(`PERF_SESSION_MOBILE_NAVIGATION_REQUESTS=${navigationSessionRequests}`);
+    console.log(`PERF_SESSION_MOBILE_TOTAL_REQUESTS=${initialSessionRequests + navigationSessionRequests}`);
+
+    expect(initialSessionRequests).toBe(1);
+    expect(navigationSessionRequests).toBe(1);
   });
 
   test("financial and cash-flow mobile surfaces use session-scoped APIs and remain navigable", async ({ page }) => {
