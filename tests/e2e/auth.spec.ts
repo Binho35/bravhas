@@ -109,7 +109,7 @@ test.describe("authenticated session lifecycle", () => {
     expect(sessionCookie?.sameSite).toBe("Lax");
   });
 
-  test("session request fan-out is measured across desktop load and navigation", async ({ page }) => {
+  test("session request fan-out stays at one request per desktop route transition", async ({ page }) => {
     await loginThroughApi(page);
 
     let phase: "initial" | "navigation" = "initial";
@@ -137,8 +137,8 @@ test.describe("authenticated session lifecycle", () => {
     console.log(`PERF_SESSION_DESKTOP_NAVIGATION_REQUESTS=${navigationSessionRequests}`);
     console.log(`PERF_SESSION_DESKTOP_TOTAL_REQUESTS=${initialSessionRequests + navigationSessionRequests}`);
 
-    expect(initialSessionRequests).toBeGreaterThan(1);
-    expect(navigationSessionRequests).toBeGreaterThan(1);
+    expect(initialSessionRequests).toBe(1);
+    expect(navigationSessionRequests).toBe(1);
   });
 
   test("logout revokes session and protected navigation returns to login", async ({ page }) => {
