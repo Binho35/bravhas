@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
+import { FINANCIAL_OPERATION_ID_INVALID, FINANCIAL_OPERATION_ID_REUSED } from "@/modules/financial/application/financialIdempotency";
 import { RegisterReceiptUseCase } from "@/modules/financial/application/use-cases/RegisterReceiptUseCase";
-import { PrismaFinancialAccountRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialAccountRepository";
-import { PrismaFinancialTransactionRepository } from "@/modules/financial/infrastructure/repositories/PrismaFinancialTransactionRepository";
+import { FINANCIAL_CONCURRENCY_MESSAGE, runFinancialTransaction } from "@/modules/financial/infrastructure/financialTransaction";
 import { requireFinancialAccount } from "@/modules/financial/server/financialAuth";
 
 const SAFE_ERRORS = [
@@ -16,6 +16,9 @@ const SAFE_ERRORS = [
   "Esta conta não permite um novo recebimento.",
   "Esta conta não possui saldo pendente.",
   "O valor do recebimento é maior que o saldo restante.",
+  FINANCIAL_OPERATION_ID_INVALID,
+  FINANCIAL_OPERATION_ID_REUSED,
+  FINANCIAL_CONCURRENCY_MESSAGE,
 ] as const;
 
 export async function POST(request: Request) {
@@ -23,27 +26,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const accountId = typeof body.accountId === "string" ? body.accountId : "";
     const amount = typeof body.amount === "number" ? body.amount : Number(body.amount);
+    const operationId = typeof body.operationId === "string" ? body.operationId : undefined;
     const receiptDate =
       typeof body.receiptDate === "string" && body.receiptDate.trim()
         ? new Date(body.receiptDate)
         : undefined;
 
-    if (receiptDate && Number.isNaN(receiptDate.getTime())) {
-      throw new Error("A data do recebimento é inválida.");
-    }
+    if (receiptDate && Number.isNaN(receiptDate.getTime())) throw new Error("A data do recebimento é inválida.");
 
     const { actor } = await requireFinancialAccount(accountId);
-    const useCase = new RegisterReceiptUseCase(
-      new PrismaFinancialAccountRepository(),
-      new PrismaFinancialTransactionRepository(),
+    const result = await runFinancialTransaction(({ accountRepository, transactionRepository }) =>
+      new RegisterReceiptUseCase(accountRepository, transactionRepository).execute({
+        accountId: accountId.trim(),
+        amount,
+        receivedBy: actor.id,
+        receiptDate,
+        operationId,
+      }),
     );
-
-    const result = await useCase.execute({
-      accountId: accountId.trim(),
-      amount,
-      receivedBy: actor.id,
-      receiptDate,
-    });
 
     return NextResponse.json({
       success: true,
@@ -54,12 +54,10 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logServerFailure("Erro ao registrar recebimento", error);
+    const validationError = error instanceof Error && SAFE_ERRORS.includes(error.message as (typeof SAFE_ERRORS)[number]);
     return NextResponse.json(
-      {
-        success: false,
-        message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o recebimento."),
-      },
-      { status: 400 },
+      { success: false, message: safeErrorMessage(error, SAFE_ERRORS, "Não foi possível registrar o recebimento.") },
+      { status: validationError ? (serverErrorStatus(error) === 409 ? 409 : 400) : serverErrorStatus(error) },
     );
   }
 }

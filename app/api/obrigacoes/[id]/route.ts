@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
+import type { ObligationArea, ObligationPriority, ObligationStatus } from "@/modules/obligations/domain/entities/Obligation";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
+import { OBLIGATION_INVALID_TRANSITION, updateObligationRecord } from "@/modules/obligations/server/obligationService";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
 const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
@@ -16,6 +18,7 @@ const UPDATE_SAFE_ERRORS = [
   "Recorrência inválida.",
   "Informe o responsável.",
   "Informe uma data de vencimento válida.",
+  OBLIGATION_INVALID_TRANSITION,
 ] as const;
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -24,21 +27,12 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const actor = await requireObligationActor();
     const { id } = await context.params;
-    const obligation = await prisma.obligation.findFirst({
-      where: { id, companyId: actor.companyId },
-    });
-
-    if (!obligation) {
-      return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
-    }
-
+    const obligation = await prisma.obligation.findFirst({ where: { id, companyId: actor.companyId } });
+    if (!obligation) return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
     return NextResponse.json({ success: true, obligation });
   } catch (error) {
     logServerFailure("Erro ao consultar obrigação", error);
-    return NextResponse.json(
-      { success: false, message: "Não foi possível consultar a obrigação." },
-      { status: 401 },
-    );
+    return NextResponse.json({ success: false, message: "Não foi possível consultar a obrigação." }, { status: serverErrorStatus(error) });
   }
 }
 
@@ -46,16 +40,10 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const actor = await requireObligationActor();
     const { id } = await context.params;
+    const current = await prisma.obligation.findFirst({ where: { id, companyId: actor.companyId } });
+    if (!current) return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
+
     const body = await request.json();
-
-    const current = await prisma.obligation.findFirst({
-      where: { id, companyId: actor.companyId },
-    });
-
-    if (!current) {
-      return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
-    }
-
     const title = typeof body.title === "string" ? body.title.trim() : current.title;
     const description = typeof body.description === "string" ? body.description.trim() || null : current.description;
     const area = typeof body.area === "string" ? body.area : current.area;
@@ -74,34 +62,25 @@ export async function PUT(request: Request, context: RouteContext) {
     if (!responsibleName) throw new Error("Informe o responsável.");
     if (Number.isNaN(dueDate.getTime())) throw new Error("Informe uma data de vencimento válida.");
 
-    const result = await prisma.obligation.updateMany({
-      where: { id, companyId: actor.companyId },
-      data: {
-        title,
-        description,
-        area,
-        priority,
-        status,
-        responsibleName,
-        dueDate,
-        completedAt: status === "COMPLETED" ? current.completedAt ?? new Date() : null,
-        recurrence,
-        notes,
-        updatedBy: actor.id,
-      },
+    const obligation = await updateObligationRecord(actor, id, {
+      title,
+      description,
+      area: area as ObligationArea,
+      priority: priority as ObligationPriority,
+      status: status as ObligationStatus,
+      recurrence,
+      responsibleName,
+      dueDate,
+      notes,
     });
-
-    if (result.count !== 1) {
-      return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
-    }
-
-    const obligation = await prisma.obligation.findFirst({ where: { id, companyId: actor.companyId } });
+    if (!obligation) return NextResponse.json({ success: false, message: "Obrigação não encontrada." }, { status: 404 });
     return NextResponse.json({ success: true, obligation });
   } catch (error) {
     logServerFailure("Erro ao atualizar obrigação", error);
+    const validationError = error instanceof Error && UPDATE_SAFE_ERRORS.includes(error.message as (typeof UPDATE_SAFE_ERRORS)[number]);
     return NextResponse.json(
       { success: false, message: safeErrorMessage(error, UPDATE_SAFE_ERRORS, "Não foi possível atualizar a obrigação.") },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }

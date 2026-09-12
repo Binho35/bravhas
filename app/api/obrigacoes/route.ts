@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { logServerFailure, safeErrorMessage } from "@/lib/serverErrors";
+import { logServerFailure, safeErrorMessage, serverErrorStatus } from "@/lib/serverErrors";
+import type { ObligationArea, ObligationPriority, ObligationStatus } from "@/modules/obligations/domain/entities/Obligation";
 import { requireObligationActor } from "@/modules/obligations/server/obligationAuth";
+import { createObligationRecord } from "@/modules/obligations/server/obligationService";
 
 const AREAS = new Set(["FINANCIAL", "HR", "PAYROLL", "COMPLIANCE", "ADMINISTRATIVE"]);
 const PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
@@ -26,14 +27,10 @@ export async function GET() {
       where: { companyId: actor.companyId },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     });
-
     return NextResponse.json({ success: true, obligations });
   } catch (error) {
     logServerFailure("Erro ao listar obrigações", error);
-    return NextResponse.json(
-      { success: false, message: "Não foi possível carregar as obrigações." },
-      { status: 401 },
-    );
+    return NextResponse.json({ success: false, message: "Não foi possível carregar as obrigações." }, { status: serverErrorStatus(error) });
   }
 }
 
@@ -41,7 +38,6 @@ export async function POST(request: Request) {
   try {
     const actor = await requireObligationActor();
     const body = await request.json();
-
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const description = typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
     const area = typeof body.area === "string" ? body.area : "";
@@ -60,32 +56,24 @@ export async function POST(request: Request) {
     if (!responsibleName) throw new Error("Informe o responsável.");
     if (Number.isNaN(dueDate.getTime())) throw new Error("Informe uma data de vencimento válida.");
 
-    const obligation = await prisma.obligation.create({
-      data: {
-        id: randomUUID(),
-        companyId: actor.companyId,
-        title,
-        description,
-        area,
-        priority,
-        status,
-        responsibleUserId: actor.id,
-        responsibleName,
-        dueDate,
-        completedAt: status === "COMPLETED" ? new Date() : null,
-        recurrence,
-        notes,
-        createdBy: actor.id,
-        updatedBy: actor.id,
-      },
+    const obligation = await createObligationRecord(actor, {
+      title,
+      description,
+      area: area as ObligationArea,
+      priority: priority as ObligationPriority,
+      status: status as ObligationStatus,
+      recurrence,
+      responsibleName,
+      dueDate,
+      notes,
     });
-
     return NextResponse.json({ success: true, obligation }, { status: 201 });
   } catch (error) {
     logServerFailure("Erro ao criar obrigação", error);
+    const validationError = error instanceof Error && CREATE_SAFE_ERRORS.includes(error.message as (typeof CREATE_SAFE_ERRORS)[number]);
     return NextResponse.json(
       { success: false, message: safeErrorMessage(error, CREATE_SAFE_ERRORS, "Não foi possível criar a obrigação.") },
-      { status: 400 },
+      { status: validationError ? 400 : serverErrorStatus(error) },
     );
   }
 }

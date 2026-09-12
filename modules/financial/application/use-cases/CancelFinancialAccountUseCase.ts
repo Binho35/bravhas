@@ -1,134 +1,63 @@
-import type {
-  FinancialAccount,
-} from "../../domain/entities/FinancialAccount";
-
-import type {
-  FinancialAccountRepository,
-} from "../repositories/FinancialAccountRepository";
-
-import type {
-  FinancialTransactionRepository,
-} from "../repositories/FinancialTransactionRepository";
+import type { FinancialAccount } from "../../domain/entities/FinancialAccount";
+import type { FinancialAccountRepository } from "../repositories/FinancialAccountRepository";
+import type { FinancialTransactionRepository } from "../repositories/FinancialTransactionRepository";
+import { findExistingFinancialOperation, normalizeFinancialOperationId } from "../financialIdempotency";
 
 export interface CancelFinancialAccountInput {
   accountId: string;
-
   canceledBy: string;
-
   cancellationDate?: Date;
+  operationId?: string;
 }
 
 export interface CancelFinancialAccountResult {
   account: FinancialAccount;
-
   transactionId: string;
-
   canceledAt: Date;
 }
 
 export class CancelFinancialAccountUseCase {
   constructor(
     private readonly accountRepository: FinancialAccountRepository,
-
     private readonly transactionRepository: FinancialTransactionRepository,
   ) {}
 
-  async execute(
-    input: CancelFinancialAccountInput,
-  ): Promise<CancelFinancialAccountResult> {
-    const accountId =
-      input.accountId.trim();
+  async execute(input: CancelFinancialAccountInput): Promise<CancelFinancialAccountResult> {
+    const accountId = input.accountId.trim();
+    if (!accountId) throw new Error("A conta financeira é obrigatória.");
 
-    if (!accountId) {
-      throw new Error(
-        "A conta financeira é obrigatória.",
-      );
+    const canceledBy = input.canceledBy.trim();
+    if (!canceledBy) throw new Error("O responsável pelo cancelamento é obrigatório.");
+
+    const account = await this.accountRepository.findById(accountId);
+    if (!account) throw new Error("Conta financeira não encontrada.");
+
+    const operationId = normalizeFinancialOperationId(input.operationId);
+    const existing = await findExistingFinancialOperation(this.transactionRepository, operationId, {
+      accountId,
+      type: "CANCELLATION",
+      amount: 0,
+    });
+    if (existing) {
+      return { account, transactionId: existing.id, canceledAt: new Date(existing.performedAt) };
     }
 
-    const canceledBy =
-      input.canceledBy.trim();
+    if (account.data.status === "CANCELED") throw new Error("Esta conta já está cancelada.");
+    if (account.data.status === "PAID") throw new Error("Uma conta já liquidada não pode ser cancelada.");
 
-    if (!canceledBy) {
-      throw new Error(
-        "O responsável pelo cancelamento é obrigatório.",
-      );
-    }
+    const canceledAt = input.cancellationDate ?? new Date();
+    const updatedAccount = account.cancel();
+    const savedAccount = await this.accountRepository.update(updatedAccount);
+    const transaction = await this.transactionRepository.create({
+      id: operationId ?? crypto.randomUUID(),
+      accountId,
+      type: "CANCELLATION",
+      amount: 0,
+      performedBy: canceledBy,
+      performedAt: canceledAt.toISOString(),
+      notes: "Conta cancelada.",
+    });
 
-    const account =
-      await this.accountRepository.findById(
-        accountId,
-      );
-
-    if (!account) {
-      throw new Error(
-        "Conta financeira não encontrada.",
-      );
-    }
-
-    if (
-      account.data.status ===
-      "CANCELED"
-    ) {
-      throw new Error(
-        "Esta conta já está cancelada.",
-      );
-    }
-
-    if (
-      account.data.status ===
-      "PAID"
-    ) {
-      throw new Error(
-        "Uma conta já liquidada não pode ser cancelada.",
-      );
-    }
-
-    const canceledAt =
-      input.cancellationDate ??
-      new Date();
-
-    const updatedAccount =
-      account.cancel();
-
-    const savedAccount =
-      await this.accountRepository.update(
-        updatedAccount,
-      );
-
-    const transaction =
-      await this.transactionRepository.create(
-        {
-          id:
-            crypto.randomUUID(),
-
-          accountId:
-            accountId,
-
-          type:
-            "CANCELLATION",
-
-          amount:
-            0,
-
-          performedBy:
-            canceledBy,
-
-          performedAt:
-            canceledAt.toISOString(),
-
-          notes:
-            "Conta cancelada.",
-        },
-      );
-
-    return {
-      account:
-        savedAccount,
-
-      transactionId:
-        transaction.id,
-
-      canceledAt,
-    };
+    return { account: savedAccount, transactionId: transaction.id, canceledAt };
   }
 }

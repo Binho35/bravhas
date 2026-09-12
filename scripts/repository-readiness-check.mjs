@@ -30,7 +30,7 @@ async function collectFiles(relativeDir) {
   return files;
 }
 
-const nextConfig = await read("next.config.ts");
+const nextConfig = await read("next.config.mjs");
 for (const expected of [
   "X-Content-Type-Options",
   "nosniff",
@@ -39,7 +39,7 @@ for (const expected of [
   "Referrer-Policy",
   "Permissions-Policy",
   "poweredByHeader: false",
-]) requireText(nextConfig, expected, "next.config.ts");
+]) requireText(nextConfig, expected, "next.config.mjs");
 
 const envExample = await read(".env.example");
 for (const expected of ["DATABASE_URL=", "DATABASE_DIRECT_URL=", "BRAVHAS_ENV="]) {

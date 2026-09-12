@@ -1,194 +1,129 @@
 # BravHAS
 
-BravHAS é um SaaS administrativo multi-tenant para centralizar rotinas de Financeiro, RH, Departamento Pessoal e Obrigações, com autenticação server-side, RBAC, isolamento por empresa e trilha de qualidade automatizada.
+BravHAS é a plataforma administrativa e financeira da BravSystems, com módulos de operação, Pessoas/RH/DP, Financeiro, Fluxo de Caixa, Obrigações, Agenda, Documentos e Indicadores.
 
-## Stack
+## Estado de readiness
 
-- Next.js 16 / React 19 / TypeScript
-- PostgreSQL
-- Prisma ORM
-- Tailwind CSS
-- Playwright
-- GitHub Actions
+O repositório possui gates automatizados para instalação, dependências, Prisma, migrations, fresh database, segurança, contratos unitários, integridade multi-tenant, TypeScript, lint, build, E2E autenticado, cross-tenant/RBAC, smoke desktop consolidado e smoke mobile.
 
-## Pré-requisitos
+Também existem contratos operacionais para:
 
-- Node.js 24 (mesma versão usada no Quality)
-- npm
-- PostgreSQL 16 ou compatível
+- production preflight;
+- storage documental vendor-neutral;
+- backup e restore protegidos;
+- health/readiness;
+- smoke pós-deploy;
+- incident response;
+- privacidade/retenção;
+- inventário de configuração/secrets.
 
-## Configuração local
+**Internal/Repository Ready não significa Production Ready.** Produção exige evidências reais de infraestrutura, storage privado persistente, backup/restore exercitado, observabilidade externa, deploy/rollback exercitado, secrets/rotação, branch protection e homologação humana.
 
-1. Copie `.env.example` para `.env` e informe URLs de banco de desenvolvimento.
-2. Instale dependências:
+## Documentação principal
 
-```bash
-npm ci
-```
+- `docs/REPOSITORY-READINESS.md`
+- `docs/audit/NEXUS-HOMOLOGATION-PRODUCTION-READINESS-2026-09-05.md`
+- `docs/audit/NEXUS-READINESS-MATRIX-2026-09-05.md`
+- `docs/operations/STORAGE.md`
+- `docs/operations/BACKUP-RESTORE.md`
+- `docs/operations/DEPLOY-ROLLBACK.md`
+- `docs/operations/OBSERVABILITY.md`
+- `docs/operations/INCIDENT-RESPONSE.md`
+- `docs/operations/PRIVACY-RETENTION.md`
+- `docs/operations/SECRETS-CONFIG.md`
 
-3. Gere o Prisma Client e aplique migrations:
+## Desenvolvimento local
 
-```bash
-npm run prisma:generate
-npm run db:migrate
-```
+Fluxo base:
 
-4. Para ambiente de TEST/HOMOLOGATION, execute o seed permitido:
+1. `npm ci`
+2. `npx prisma generate`
+3. `npx prisma migrate deploy`
+4. `npm run seed`
+5. `npm run dev`
 
-```bash
-npm run seed
-```
+Use variáveis próprias do ambiente. `BRAVHAS_DEV_AUTH_BYPASS` deve permanecer `false` fora de desenvolvimento controlado.
 
-5. Inicie o projeto:
+## Contratos de qualidade
 
-```bash
-npm run dev
-```
+Comandos padronizados:
 
-A aplicação local usa `http://localhost:3000` por padrão.
+- `npm run typecheck`
+- `npm run lint`
+- `npm run test:unit`
+- `npm run test:contracts`
+- `npm run test:integrity`
+- `npm run build`
+- `npm run test:e2e:auth`
+- `npm run test:e2e:security`
+- `npm run test:e2e:desktop`
+- `npm run test:e2e:mobile`
 
-## Variáveis de ambiente
+O workflow `.github/workflows/quality.yml` é a fonte de verdade para os gates automatizados do Pull Request e opera sem side effects de produção.
 
-| Variável | Uso |
-| --- | --- |
-| `DATABASE_URL` | conexão principal da aplicação |
-| `DATABASE_DIRECT_URL` | conexão direta usada pelo Prisma/migrations |
-| `SHADOW_DATABASE_URL` | banco shadow quando necessário ao fluxo de desenvolvimento |
-| `BRAVHAS_ENV` | classificação de ambiente; fixtures E2E aceitam apenas TEST/HOMOLOGATION |
-| `BRAVHAS_DEV_AUTH_BYPASS` | bypass de desenvolvimento; deve permanecer `false` em Quality/ambientes reais |
-| `NODE_ENV` | ambiente padrão do Node/Next.js |
+## Banco de dados
 
-Nunca versione credenciais reais.
+O projeto usa Prisma/PostgreSQL e valores monetários persistidos com `Decimal(15,2)`.
 
-## Banco e migrations
+Preserve migrations históricas e use `prisma migrate deploy` em ambientes controlados.
 
-O histórico em `prisma/migrations` é a fonte de evolução do banco. O repositório não admite atalhos destrutivos para obter um estado verde.
+Não usar em banco relevante:
 
-Fluxo suportado:
+- `prisma migrate reset`;
+- `prisma db push --accept-data-loss`.
 
-```bash
-npx prisma validate
-npx prisma generate
-npx prisma migrate deploy
-npx prisma migrate status
-```
+Operações críticas de pagamento, recebimento, estorno e cancelamento financeiro são executadas em transação Prisma serializable para manter saldo/status e histórico atômicos.
 
-Não usar como procedimento de correção:
+## Health e readiness
 
-- `prisma migrate reset` em dados relevantes;
-- `prisma db push --accept-data-loss`;
-- reescrever ou apagar migrations já integradas.
+- `/api/health`: liveness do processo HTTP;
+- `/api/readiness`: aptidão para receber tráfego, incluindo banco e storage essencial.
 
-O Quality valida também um PostgreSQL vazio: migrations → seed TEST → migration status.
+Readiness é fail-closed em produção quando o storage persistente não está homologado.
 
-## Autenticação e sessão
+## Documentos
 
-A autenticação é server-backed. O browser não usa `localStorage` como fonte de verdade.
+O filesystem local é exclusivamente desenvolvimento/homologação e é bloqueado em produção.
 
-A sessão utiliza:
+O contrato `DocumentStorage` oferece save/read/delete/health, escopo tenant/recurso, erros tipados, checksum e validação de arquivo. O provider produtivo ainda depende de seleção e infraestrutura externa.
 
-- token aleatório criptograficamente seguro;
-- hash SHA-256 persistido no banco, não o token raw;
-- cookie `httpOnly`;
-- `sameSite=lax`;
-- `secure` em produção;
-- expiração e revogação;
-- logout com invalidação de sessão.
+## Operação
 
-`/api/auth/session` é a fonte de validação de sessão para o client. Rotas/páginas sensíveis continuam exigindo autorização server-side.
+- `npm run prod:preflight`: valida contrato de configuração produtiva sem imprimir secrets;
+- `npm run backup:dry-run`: valida contrato de backup sem criar dump;
+- `npm run backup:execute`: cria dump/manifesto/checksum quando executado em ambiente autorizado;
+- `npm run restore:guard:self-test`: prova as guardas de restore;
+- `npm run restore:execute -- --artifact=/caminho/arquivo.dump`: restore somente em ambiente não produtivo explicitamente autorizado;
+- `npm run deploy:smoke`: smoke futuro do ambiente publicado.
 
-## Multi-tenancy
+Nenhum desses comandos implica autorização para produção.
 
-`companyId` e ator devem ser derivados da sessão no servidor. Parâmetros enviados pelo browser não são fonte confiável de tenant ou autoria.
+## Segurança
 
-Os E2E mantêm dois tenants sintéticos e testam IDs reais estrangeiros para evitar falso isolamento baseado somente em UUID inexistente.
+Princípios obrigatórios:
 
-## RBAC RH/DP
+- autenticação e autorização server-side;
+- `companyId` e ator derivados da sessão autenticada;
+- IDs do browser nunca substituem autorização;
+- cross-tenant tratado como P0;
+- RBAC preservado;
+- logs e mensagens sanitizados;
+- nenhum secret versionado;
+- storage e readiness fail-closed;
+- nenhuma fixture aceita fora de TEST/HOMOLOGATION.
 
-Perfis profissionais modelados no repositório incluem:
+## Produção
 
-- CEO;
-- Head Administrativo;
-- Gestor RH/DP;
-- Analista de RH;
-- Analista de DP;
-- Assistente RH/DP;
-- Gestor de Setor;
-- Auditoria / Consulta.
+Antes de declarar Production Ready, registrar evidência real de:
 
-OWNER/ADMIN permanecem papéis técnicos master dentro do próprio tenant.
+- provider/storage;
+- backup e restore;
+- infraestrutura PostgreSQL;
+- observabilidade/alertas;
+- preflight/deploy;
+- rollback;
+- secrets e rotação;
+- branch protection;
+- homologação humana.
 
-Gestor de Setor é limitado pelo vínculo funcional (`UserEmployeeLink`) ao próprio colaborador e subordinados diretos quando a política de escopo se aplica.
-
-## Testes E2E
-
-As fixtures em `scripts/e2e-seed.ts` são exclusivamente sintéticas e recusam execução fora de TEST/HOMOLOGATION.
-
-Scripts principais:
-
-```bash
-npm run e2e:seed
-npm run test:e2e:auth
-npm run test:e2e:security
-npm run test:e2e:mobile
-```
-
-Cobertura browser inclui:
-
-- login/logout;
-- cookie/sessão;
-- sessão expirada e revogada;
-- token inválido;
-- direct URL protection;
-- cross-tenant com IDs válidos;
-- RBAC negativo;
-- Gestor de Setor;
-- actor/tenant spoofing;
-- mobile product smoke.
-
-## Quality
-
-`.github/workflows/quality.yml` executa gates determinísticos para:
-
-- `npm ci`;
-- production dependency audit fail-closed;
-- Prisma validate/generate;
-- migration safety;
-- security regression;
-- migrate deploy;
-- seed;
-- TypeScript;
-- lint;
-- build;
-- fresh database;
-- authenticated E2E;
-- cross-tenant/RBAC negative E2E;
-- mobile product smoke.
-
-Não mascarar falhas com `|| true`, remoção de assertions ou redução de gates.
-
-## Segurança HTTP
-
-`next.config.ts` aplica headers defensivos globais, incluindo proteção contra MIME sniffing/frame embedding e políticas de referrer/permissions/cross-origin. CSP deve ser introduzida apenas com política testada que não dependa de `unsafe-eval` em produção e não quebre os scripts do Next.js.
-
-## Repository Ready x Production Ready
-
-Um Quality verde comprova o estado do código/repositório, não o ambiente de produção.
-
-Ainda exigem evidência externa antes de declarar Production Ready, conforme o ambiente adotado:
-
-- infraestrutura real;
-- banco/storage de produção;
-- secrets;
-- domínio, DNS e TLS;
-- e-mail transacional;
-- observabilidade;
-- backup verificado;
-- restore testado;
-- DR exercitado;
-- homologação humana;
-- deploy/carga real.
-
-## Governança da `main`
-
-O repositório espera PR + Quality verde antes de merge. Se branch protection não estiver habilitada no GitHub, isso permanece um blocker de governança e deve ser configurado no nível do repositório, sem ser falsamente tratado como resolvido pelo código.
+Percentuais de readiness só devem ser publicados quando critérios/pesos forem formalmente aprovados e as evidências externas existirem.

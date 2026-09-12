@@ -1,33 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { resolveRequestId } from "@/lib/observability";
 
-export async function GET() {
-  const startedAt = Date.now();
-
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-
-    return NextResponse.json({
-      status: "ok",
-      application: "bravhas",
-      database: "connected",
-      responseTimeMs: Date.now() - startedAt,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Database connection failed";
-
-    return NextResponse.json(
-      {
-        status: "degraded",
-        application: "bravhas",
-        database: "unavailable",
-        responseTimeMs: Date.now() - startedAt,
-        timestamp: new Date().toISOString(),
-        error: process.env.NODE_ENV === "development" ? message : "Database unavailable",
-      },
-      { status: 503 },
-    );
-  }
+export async function GET(request: Request) {
+  const requestId = resolveRequestId(request);
+  const response = NextResponse.json({
+    status: "ok",
+    application: "bravhas",
+    check: "liveness",
+    timestamp: new Date().toISOString(),
+  });
+  response.headers.set("X-Request-ID", requestId);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }

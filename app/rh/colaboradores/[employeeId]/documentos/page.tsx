@@ -4,63 +4,143 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, BadgeCheck, ExternalLink, FilePlus2, Files, Upload } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { logServerFailure } from "@/lib/serverErrors";
 import { hrdpPermission } from "@/modules/auth/server/hrdpPermissions";
 import { logHrdpAudit } from "@/modules/hrdp/audit/logHrdpAudit";
-import { isLocalDocumentStorageKey, saveLocalDocumentFile } from "@/modules/hrdp/storage/localDocumentStorage";
+import type { DocumentStorage, StoredDocument } from "@/modules/hrdp/storage/documentStorage";
+import { getDocumentStorage, isManagedDocumentStorageKey } from "@/modules/hrdp/storage/storageRuntime";
+
+const DOCUMENT_TYPES = new Set([
+  "CURRICULO",
+  "PROPOSTA",
+  "CONTRATO",
+  "DOCUMENTO_PESSOAL",
+  "HOLERITE",
+  "ESPELHO_PONTO",
+  "ATESTADO",
+  "MEDIDA_DISCIPLINAR",
+  "FERIAS",
+  "OUTRO",
+]);
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function optionalDate(formData: FormData, key: string) {
+  const value = text(formData, key);
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Data inválida.");
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Data inválida.");
+  return parsed;
+}
+
+function externalDocumentReference(formData: FormData) {
+  const reference = text(formData, "externalReference");
+  if (!reference) return null;
+  if (reference.length > 2048 || /[\u0000-\u001f\u007f]/.test(reference)) {
+    throw new Error("Referência externa inválida.");
+  }
+  const normalized = reference.toLowerCase();
+  if (normalized.startsWith("local:") || normalized.startsWith("vercel-blob:")) {
+    throw new Error("Referência externa usa prefixo reservado.");
+  }
+  return reference;
+}
+
 async function createDocument(employeeId: string, formData: FormData) {
   "use server";
   const actor = await hrdpPermission.colaboradores("create");
-  const employee = await prisma.hrEmployee.findFirst({ where: { id: employeeId, companyId: actor.companyId }, select: { id: true, companyId: true } });
+  const employee = await prisma.hrEmployee.findFirst({
+    where: { id: employeeId, companyId: actor.companyId },
+    select: { id: true, companyId: true },
+  });
   if (!employee) throw new Error("Colaborador não encontrado ou fora do escopo autorizado.");
 
   const type = text(formData, "type");
   const title = text(formData, "title");
-  if (!type || !title) throw new Error("Tipo e título são obrigatórios.");
+  if (!type || !DOCUMENT_TYPES.has(type)) throw new Error("Tipo de documento inválido.");
+  if (!title || title.length > 180) throw new Error("Título do documento inválido.");
+
+  const notes = text(formData, "notes");
+  if (notes && notes.length > 4000) throw new Error("Observação do documento excede o limite permitido.");
 
   const fileValue = formData.get("file");
-  const externalReference = text(formData, "externalReference");
+  const externalReference = externalDocumentReference(formData);
+  let storedFile: StoredDocument | null = null;
+  let storage: DocumentStorage | null = null;
   let storageKey = externalReference;
 
   if (fileValue instanceof File && fileValue.size > 0) {
-    storageKey = await saveLocalDocumentFile({
+    storage = getDocumentStorage();
+    storedFile = await storage.save({
       companyId: actor.companyId,
       employeeId,
       file: fileValue,
     });
+    storageKey = storedFile.storageKey;
   }
 
   if (!storageKey) throw new Error("Anexe um arquivo ou informe uma referência externa para o documento.");
 
-  const issuedAt = text(formData, "issuedAt");
-  const expiresAt = text(formData, "expiresAt");
+  const issuedAt = optionalDate(formData, "issuedAt");
+  const expiresAt = optionalDate(formData, "expiresAt");
 
-  const document = await prisma.hrEmployeeDocument.create({
-    data: {
-      companyId: actor.companyId,
-      employeeId,
-      type,
-      title,
-      storageKey,
-      issuedAt: issuedAt ? new Date(`${issuedAt}T12:00:00`) : null,
-      expiresAt: expiresAt ? new Date(`${expiresAt}T12:00:00`) : null,
-      notes: text(formData, "notes"),
-    },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const document = await tx.hrEmployeeDocument.create({
+        data: {
+          companyId: actor.companyId,
+          employeeId,
+          type,
+          title,
+          storageKey,
+          issuedAt,
+          expiresAt,
+          notes,
+        },
+      });
 
-  await logHrdpAudit({
-    companyId: actor.companyId,
-    actorUserId: actor.id,
-    action: "EMPLOYEE_DOCUMENT_CREATED",
-    entityType: "HrEmployeeDocument",
-    entityId: document.id,
-    metadata: { employeeId, type, title, uploaded: isLocalDocumentStorageKey(storageKey) },
-  });
+      await logHrdpAudit(
+        {
+          companyId: actor.companyId,
+          actorUserId: actor.id,
+          action: "EMPLOYEE_DOCUMENT_CREATED",
+          entityType: "HrEmployeeDocument",
+          entityId: document.id,
+          metadata: {
+            employeeId,
+            type,
+            title,
+            uploaded: Boolean(storedFile),
+            ...(storedFile
+              ? {
+                  mimeType: storedFile.mimeType,
+                  size: storedFile.size,
+                  checksumSha256: storedFile.checksumSha256,
+                }
+              : {}),
+          },
+        },
+        tx,
+      );
+    });
+  } catch (error) {
+    if (storedFile && storage) {
+      try {
+        await storage.delete({
+          companyId: actor.companyId,
+          employeeId,
+          storageKey: storedFile.storageKey,
+        });
+      } catch (cleanupError) {
+        logServerFailure("Falha ao compensar upload documental", cleanupError);
+      }
+    }
+    throw error;
+  }
 
   revalidatePath(`/rh/colaboradores/${employeeId}/documentos`);
   revalidatePath(`/rh/colaboradores/${employeeId}`);
@@ -73,21 +153,30 @@ async function verifyDocument(employeeId: string, formData: FormData) {
   const id = text(formData, "id");
   if (!id) throw new Error("Documento inválido.");
 
-  const document = await prisma.hrEmployeeDocument.findFirst({ where: { id, employeeId, companyId: actor.companyId }, select: { id: true, title: true } });
+  const document = await prisma.hrEmployeeDocument.findFirst({
+    where: { id, employeeId, companyId: actor.companyId },
+    select: { id: true, title: true },
+  });
   if (!document) throw new Error("Documento não encontrado ou fora do escopo autorizado.");
 
-  await prisma.hrEmployeeDocument.update({
-    where: { id },
-    data: { verifiedAt: new Date(), verifiedBy: actor.name },
-  });
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.hrEmployeeDocument.updateMany({
+      where: { id, employeeId, companyId: actor.companyId },
+      data: { verifiedAt: new Date(), verifiedBy: actor.name },
+    });
+    if (updated.count !== 1) throw new Error("Documento não encontrado ou fora do escopo autorizado.");
 
-  await logHrdpAudit({
-    companyId: actor.companyId,
-    actorUserId: actor.id,
-    action: "EMPLOYEE_DOCUMENT_VERIFIED",
-    entityType: "HrEmployeeDocument",
-    entityId: id,
-    metadata: { employeeId, title: document.title },
+    await logHrdpAudit(
+      {
+        companyId: actor.companyId,
+        actorUserId: actor.id,
+        action: "EMPLOYEE_DOCUMENT_VERIFIED",
+        entityType: "HrEmployeeDocument",
+        entityId: id,
+        metadata: { employeeId, title: document.title },
+      },
+      tx,
+    );
   });
 
   revalidatePath(`/rh/colaboradores/${employeeId}/documentos`);
@@ -163,15 +252,15 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
             <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3fb] text-[#154b7a]"><FilePlus2 className="h-5 w-5" /></div><div><h2 className="font-bold text-[#0b2947]">Adicionar documento</h2><p className="text-xs text-slate-500">Anexe o arquivo real ao dossiê funcional.</p></div></div>
             <div className="mt-5 space-y-4">
               <select name="type" required className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm"><option value="">Tipo de documento</option><option value="CURRICULO">Currículo</option><option value="PROPOSTA">Carta proposta</option><option value="CONTRATO">Contrato de trabalho</option><option value="DOCUMENTO_PESSOAL">Documento pessoal</option><option value="HOLERITE">Holerite</option><option value="ESPELHO_PONTO">Espelho de ponto</option><option value="ATESTADO">Atestado / declaração</option><option value="MEDIDA_DISCIPLINAR">Medida disciplinar</option><option value="FERIAS">Documento de férias</option><option value="OUTRO">Outro</option></select>
-              <input name="title" required placeholder="Título do documento" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm" />
+              <input name="title" required maxLength={180} placeholder="Título do documento" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm" />
               <label className="block rounded-2xl border border-dashed border-blue-300 bg-blue-50/60 p-4">
                 <span className="flex items-center gap-2 text-sm font-semibold text-[#154b7a]"><Upload className="h-4 w-4" />Selecionar arquivo</span>
                 <input name="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="mt-3 block w-full text-xs text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-[#0b2947] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white" />
-                <span className="mt-2 block text-[11px] text-slate-500">PDF, JPG, PNG ou WEBP · máximo 5 MB. Durante a homologação local, o arquivo fica armazenado apenas neste Mac.</span>
+                <span className="mt-2 block text-[11px] text-slate-500">PDF, JPG, PNG ou WEBP · máximo 4 MB. O conteúdo é validado no servidor antes da persistência.</span>
               </label>
-              <input name="externalReference" placeholder="Ou informe referência externa / URL interna" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm" />
+              <input name="externalReference" maxLength={2048} placeholder="Ou informe referência externa / URL interna" className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm" />
               <div className="grid grid-cols-2 gap-3"><label className="text-xs text-slate-500">Emissão<input name="issuedAt" type="date" className="mt-1 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm" /></label><label className="text-xs text-slate-500">Validade<input name="expiresAt" type="date" className="mt-1 h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm" /></label></div>
-              <textarea name="notes" rows={3} placeholder="Observações" className="w-full rounded-2xl border border-slate-200 p-4 text-sm" />
+              <textarea name="notes" rows={3} maxLength={4000} placeholder="Observações" className="w-full rounded-2xl border border-slate-200 p-4 text-sm" />
               <button className="h-11 w-full rounded-2xl bg-[#0b2947] text-sm font-semibold text-white">Salvar documento</button>
             </div>
           </form>
@@ -179,8 +268,8 @@ export default async function EmployeeDocumentsPage({ params }: { params: Promis
           <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 p-6"><Files className="h-5 w-5 text-[#154b7a]" /><div><h2 className="font-bold text-[#0b2947]">Arquivo funcional</h2><p className="text-xs text-slate-500">Histórico documental do colaborador.</p></div></div>
             {employee.documents.length === 0 ? <div className="p-14 text-center text-sm text-slate-500">Nenhum documento cadastrado. Anexe ao menos um documento para avançar.</div> : <div className="divide-y divide-slate-100">{employee.documents.map((item) => {
-              const localFile = isLocalDocumentStorageKey(item.storageKey);
-              return <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>{item.type}</span>{localFile ? <a href={`/api/hr/documents/${item.id}/file`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#154b7a] hover:underline"><ExternalLink className="h-3.5 w-3.5" />Abrir arquivo</a> : item.storageKey ? <span className="max-w-[250px] truncate">{item.storageKey}</span> : <span>Sem arquivo</span>}</div></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>;
+              const managedFile = isManagedDocumentStorageKey(item.storageKey);
+              return <div key={item.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr_120px_150px] lg:items-center"><div><p className="font-semibold text-slate-800">{item.title}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>{item.type}</span>{managedFile ? <a href={`/api/hr/documents/${item.id}/file`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#154b7a] hover:underline"><ExternalLink className="h-3.5 w-3.5" />Abrir arquivo</a> : item.storageKey ? <span className="max-w-[250px] truncate">{item.storageKey}</span> : <span>Sem arquivo</span>}</div></div><div className="text-xs text-slate-500"><p>Emissão: {dateLabel(item.issuedAt)}</p><p>Validade: {dateLabel(item.expiresAt)}</p></div><span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.verifiedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{item.verifiedAt ? "Conferido" : "Pendente"}</span>{item.verifiedAt ? <span className="text-xs text-slate-400">{item.verifiedBy ?? "RH"}<br />{dateLabel(item.verifiedAt)}</span> : <form action={verifyDocument.bind(null, employee.id)}><input type="hidden" name="id" value={item.id} /><button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white"><BadgeCheck className="h-4 w-4" />Conferir</button></form>}</div>;
             })}</div>}
           </article>
         </section>
