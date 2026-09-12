@@ -5,7 +5,7 @@ import type { StorageHealth } from "../../modules/hrdp/storage/documentStorage";
 import {
   classifyBravhasRuntimeEnvironment,
   evaluateReadiness,
-} from "../../app/api/readiness/route";
+} from "../../lib/readiness";
 
 const healthyBlob: StorageHealth = {
   ok: true,
