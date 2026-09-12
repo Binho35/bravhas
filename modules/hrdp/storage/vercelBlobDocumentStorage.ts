@@ -17,6 +17,7 @@ import {
 const STORAGE_PREFIX = "vercel-blob:";
 const HEALTHCHECK_PATH = "__bravhas/healthcheck-not-created";
 const FILE_SEPARATOR = "--";
+const DIAGNOSTIC_OPERATION = "vercel-blob-healthcheck";
 
 export type VercelBlobReadResult = {
   statusCode: number;
@@ -77,6 +78,72 @@ function errorName(error: unknown) {
   return typeof error === "object" && error !== null && "name" in error
     ? String((error as { name?: unknown }).name)
     : "";
+}
+
+function errorConstructorName(error: unknown) {
+  if (typeof error !== "object" || error === null) return "UnknownError";
+  const ctor = (error as { constructor?: { name?: unknown } }).constructor;
+  return typeof ctor?.name === "string" && ctor.name ? ctor.name : "UnknownError";
+}
+
+function errorField(error: unknown, field: "code" | "status" | "statusCode") {
+  if (typeof error !== "object" || error === null || !(field in error)) return undefined;
+  const value = (error as Record<string, unknown>)[field];
+  return typeof value === "string" || typeof value === "number" ? value : undefined;
+}
+
+function redactConfiguredValue(value: string, configuredValue: string | undefined) {
+  const candidate = configuredValue?.trim();
+  return candidate ? value.split(candidate).join("[REDACTED]") : value;
+}
+
+function sanitizeDiagnosticText(value: string) {
+  let sanitized = value;
+
+  for (const configuredValue of [
+    process.env.BLOB_READ_WRITE_TOKEN,
+    process.env.BLOB_STORE_ID,
+    process.env.DATABASE_URL,
+    process.env.DATABASE_DIRECT_URL,
+    process.env.SHADOW_DATABASE_URL,
+  ]) {
+    sanitized = redactConfiguredValue(sanitized, configuredValue);
+  }
+
+  return sanitized
+    .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[DATABASE_URL_REDACTED]")
+    .replace(/\bBearer\s+[^\s,;}]+/gi, "Bearer [REDACTED]")
+    .replace(/\bvercel_blob_rw_[A-Za-z0-9._-]+/gi, "[BLOB_TOKEN_REDACTED]")
+    .replace(/\bstore_[A-Za-z0-9_-]+\b/gi, "[BLOB_STORE_ID_REDACTED]")
+    .replace(
+      /\b(BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID|DATABASE_URL|DATABASE_DIRECT_URL|SHADOW_DATABASE_URL|password|token|cookie|secret|authorization)\s*[:=]\s*["']?[^\s,;}"']+/gi,
+      "$1=[REDACTED]",
+    )
+    .slice(0, 600);
+}
+
+function safeDiagnosticScalar(value: string | number | undefined) {
+  return typeof value === "string" ? sanitizeDiagnosticText(value) : value;
+}
+
+function logVercelBlobHealthcheckFailure(error: unknown) {
+  const diagnostic: Record<string, string | number> = {
+    operation: DIAGNOSTIC_OPERATION,
+    errorName: sanitizeDiagnosticText(errorName(error) || "UnknownError"),
+    constructorName: sanitizeDiagnosticText(errorConstructorName(error)),
+  };
+
+  const code = safeDiagnosticScalar(errorField(error, "code"));
+  const status = safeDiagnosticScalar(errorField(error, "status"));
+  const statusCode = safeDiagnosticScalar(errorField(error, "statusCode"));
+  const message = error instanceof Error ? sanitizeDiagnosticText(error.message) : "";
+
+  if (code !== undefined) diagnostic.errorCode = code;
+  if (status !== undefined) diagnostic.status = status;
+  if (statusCode !== undefined) diagnostic.statusCode = statusCode;
+  if (message) diagnostic.message = message;
+
+  console.error("BRAVHAS_DIAGNOSTIC", diagnostic);
 }
 
 function configurationFailure(error: unknown) {
@@ -218,6 +285,9 @@ export function createVercelBlobDocumentStorage(
             productionSafe: true,
           };
         }
+
+        logVercelBlobHealthcheckFailure(error);
+
         return {
           ok: false,
           provider: "vercel-blob",
