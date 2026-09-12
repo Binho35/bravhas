@@ -57,6 +57,11 @@ async function expectStorageError(fn: () => Promise<unknown>, code: StorageError
   await assert.rejects(fn, (error: unknown) => error instanceof StorageError && error.code === code);
 }
 
+function restoreEnv(name: string, previous: string | undefined) {
+  if (previous === undefined) delete process.env[name];
+  else process.env[name] = previous;
+}
+
 test("Vercel Blob private adapter satisfies save/read/delete, checksum, health and tenant scope", async () => {
   const storage = createVercelBlobDocumentStorage(memoryOperations());
   const scope = { companyId: "tenant-alpha", employeeId: "employee-1" };
@@ -137,6 +142,64 @@ test("Vercel Blob health reports real provider unavailability as STORAGE_UNAVAIL
   const health = await createVercelBlobDocumentStorage(operations).health();
   assert.equal(health.ok, false);
   assert.equal(health.code, "STORAGE_UNAVAILABLE");
+});
+
+test("Vercel Blob health diagnostic is sanitized and public health response stays generic", async () => {
+  const operations = memoryOperations();
+  const previousToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const previousStoreId = process.env.BLOB_STORE_ID;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const token = "vercel_blob_rw_test-secret-token";
+  const storeId = "store_test-secret-store";
+  const databaseUrl = "postgresql://user:super-secret-password@db.example.com:5432/bravhas";
+  const logs: unknown[][] = [];
+  const originalConsoleError = console.error;
+
+  process.env.BLOB_READ_WRITE_TOKEN = token;
+  process.env.BLOB_STORE_ID = storeId;
+  process.env.DATABASE_URL = databaseUrl;
+
+  operations.probe = async () => {
+    const error = new Error(
+      `provider unavailable token=${token} store=${storeId} database=${databaseUrl}`,
+    ) as Error & { code: string; statusCode: number };
+    error.name = "BlobServiceNotAvailable";
+    error.code = "EUPSTREAM";
+    error.statusCode = 503;
+    throw error;
+  };
+
+  console.error = (...args: unknown[]) => {
+    logs.push(args);
+  };
+
+  try {
+    const health = await createVercelBlobDocumentStorage(operations).health();
+    assert.equal(health.ok, false);
+    assert.equal(health.code, "STORAGE_UNAVAILABLE");
+
+    const publicResponse = JSON.stringify(health);
+    assert.doesNotMatch(publicResponse, /test-secret-token/);
+    assert.doesNotMatch(publicResponse, /test-secret-store/);
+    assert.doesNotMatch(publicResponse, /super-secret-password/);
+
+    assert.equal(logs.length, 1);
+    const diagnostic = JSON.stringify(logs[0]);
+    assert.match(diagnostic, /BRAVHAS_DIAGNOSTIC/);
+    assert.match(diagnostic, /vercel-blob-healthcheck/);
+    assert.match(diagnostic, /BlobServiceNotAvailable/);
+    assert.match(diagnostic, /EUPSTREAM/);
+    assert.match(diagnostic, /503/);
+    assert.doesNotMatch(diagnostic, /test-secret-token/);
+    assert.doesNotMatch(diagnostic, /test-secret-store/);
+    assert.doesNotMatch(diagnostic, /super-secret-password/);
+    assert.doesNotMatch(diagnostic, /postgresql:\/\//);
+  } finally {
+    console.error = originalConsoleError;
+    restoreEnv("BLOB_READ_WRITE_TOKEN", previousToken);
+    restoreEnv("BLOB_STORE_ID", previousStoreId);
+    restoreEnv("DATABASE_URL", previousDatabaseUrl);
+  }
 });
 
 test("Vercel Blob read maps typed BlobNotFoundError to RESOURCE_NOT_FOUND", async () => {
