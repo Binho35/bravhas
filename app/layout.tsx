@@ -10,6 +10,9 @@ import {
 import {
   AuthGuard,
 } from "@/modules/auth/components/AuthGuard";
+import {
+  AuthProvider,
+} from "@/modules/auth/components/AuthProvider";
 
 import "./globals.css";
 
@@ -53,9 +56,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full">
-        <AuthGuard>
-          {children}
-        </AuthGuard>
+        <AuthProvider>
+          <AuthGuard>
+            {children}
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );

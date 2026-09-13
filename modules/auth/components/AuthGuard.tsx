@@ -1,9 +1,9 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { getCurrentSession } from "../services/getCurrentSession";
+import { useAuth } from "../hooks/useAuth";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -25,48 +25,23 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const previewAllowed = isDevelopmentPreview(pathname);
-  const [checking, setChecking] = useState(true);
-  const [allowed, setAllowed] = useState(false);
+  const { authenticated, loading } = useAuth();
 
   useEffect(() => {
-    let active = true;
-
-    async function validateAccess() {
-      if (pathname === "/login" || previewAllowed) {
-        if (active) {
-          setAllowed(true);
-          setChecking(false);
-        }
-        return;
-      }
-
-      setChecking(true);
-      const { authenticated } = await getCurrentSession();
-
-      if (!active) return;
-
-      if (!authenticated) {
-        setAllowed(false);
-        setChecking(false);
-        router.replace("/login");
-        return;
-      }
-
-      setAllowed(true);
-      setChecking(false);
+    if (pathname === "/login" || previewAllowed || loading) {
+      return;
     }
 
-    void validateAccess();
-    return () => {
-      active = false;
-    };
-  }, [pathname, previewAllowed, router]);
+    if (!authenticated) {
+      router.replace("/login");
+    }
+  }, [authenticated, loading, pathname, previewAllowed, router]);
 
   if (pathname === "/login" || previewAllowed) {
     return children;
   }
 
-  if (checking) {
+  if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F9FC]">
         <div className="rounded-2xl border border-[#E2E8F0] bg-white px-8 py-7 text-center shadow-sm">
@@ -84,7 +59,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (!allowed) {
+  if (!authenticated) {
     return null;
   }
 
