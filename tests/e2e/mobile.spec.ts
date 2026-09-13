@@ -7,8 +7,8 @@ const alpha = {
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("Login de acesso").fill(alpha.login);
-  await page.getByLabel("Senha").fill(alpha.password);
+  await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
+  await page.getByRole("textbox", { name: "Senha" }).fill(alpha.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
