@@ -5,6 +5,8 @@ const alpha = {
   password: "E2E-Alpha-2026!Secure",
 };
 
+test.use({ viewport: { width: 390, height: 844 } });
+
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Login de acesso").fill(alpha.login);
@@ -19,10 +21,23 @@ async function expectNoSevereHorizontalOverflow(page: Page) {
 }
 
 test.describe("mobile product smoke", () => {
-  test("login, dashboard and mobile navigation remain usable without horizontal overflow", async ({ page }) => {
+  test("premium login, dashboard and mobile navigation remain usable without horizontal overflow", async ({ page }) => {
+    await page.goto("/login");
+    await expect(
+      page.getByRole("heading", {
+        name: "Controle administrativo real para financeiro, pessoas e obrigações.",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acesse sua operação", exact: true })).toBeVisible();
+    await expect(page.getByText("Financeiro sob controle", { exact: true })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("Stocco");
+    await expectNoSevereHorizontalOverflow(page);
+
     await login(page);
     await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Abrir menu de navegação" })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("Stocco");
     await expectNoSevereHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "Abrir menu de navegação" }).click();

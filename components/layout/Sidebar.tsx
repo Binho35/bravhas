@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  ShieldCheck,
   TrendingUp,
   Users,
   Wallet,
@@ -132,18 +133,27 @@ export function Sidebar() {
     .filter((section) => section.items.length > 0);
 
   return (
-    <div className="flex h-full flex-col bg-[#0B2947] text-white">
-      <div className="border-b border-white/10 px-6 py-6 pr-16 lg:pr-6">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Brav<span className="text-[#8CC4EA]">HAS</span>
-        </h1>
-        <p className="mt-1 text-xs text-white/55">Head Administration System</p>
+    <div className="flex h-full flex-col bg-[#081F35] text-white">
+      <div className="border-b border-white/10 px-5 py-5 pr-16 lg:px-6 lg:pr-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-[#0B2947] shadow-[0_12px_30px_-18px_rgba(255,255,255,0.55)]">
+            B
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black tracking-[-0.04em]">
+              Brav<span className="text-[#8CC4EA]">HAS</span>
+            </h1>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white/48">
+              Gestão Administrativa
+            </p>
+          </div>
+        </div>
       </div>
 
-      <nav aria-label="Navegação principal" className="flex-1 overflow-auto px-3 py-4">
+      <nav aria-label="Navegação principal" className="flex-1 overflow-auto px-3 py-4 lg:px-4">
         {visibleSections.map((section) => (
-          <div key={section.title} className="mb-6">
-            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+          <div key={section.title} className="mb-5 last:mb-2">
+            <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.2em] text-white/38">
               {section.title}
             </p>
 
@@ -160,14 +170,20 @@ export function Sidebar() {
                     key={item.label}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                    className={`group flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
                       active
-                        ? "bg-[#154B7A] text-white shadow-sm"
-                        : "text-white/75 hover:bg-white/5 hover:text-white"
+                        ? "bg-white text-[#0B2947] shadow-[0_12px_28px_-18px_rgba(0,0,0,0.9)]"
+                        : "text-white/72 hover:bg-white/[0.07] hover:text-white"
                     }`}
                   >
-                    <Icon size={18} aria-hidden="true" />
-                    <span>{item.label}</span>
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition ${
+                        active ? "bg-[#EAF3FB] text-[#154B7A]" : "bg-white/[0.06] text-white/62 group-hover:text-white"
+                      }`}
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 truncate">{item.label}</span>
                   </Link>
                 );
               })}
@@ -177,10 +193,13 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-white/10 p-4">
-        <div className="rounded-xl bg-white/5 p-4">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-white/50">Ambiente</p>
-          <p className="mt-2 text-sm font-semibold">Administrativo</p>
-          <p className="mt-1 text-[11px] text-white/55">BravHAS MVP 0.1</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
+          <div className="flex items-center gap-2 text-[#9ED4F5]">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]">Ambiente protegido</p>
+          </div>
+          <p className="mt-2 text-xs font-semibold text-white/88">Operação administrativa</p>
+          <p className="mt-1 text-[11px] leading-5 text-white/45">Acesso e permissões definidos pela sua organização.</p>
         </div>
       </div>
     </div>
