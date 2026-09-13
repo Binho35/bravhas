@@ -4,8 +4,8 @@ import { e2eUsers } from "../fixtures";
 
 export async function loginAsAlphaOwner(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("Login de acesso").fill(e2eUsers.alphaOwner.login);
-  await page.getByLabel("Senha").fill(e2eUsers.alphaOwner.password);
+  await page.getByLabel("Usuário ou e-mail").fill(e2eUsers.alphaOwner.login);
+  await page.getByRole("textbox", { name: "Senha" }).fill(e2eUsers.alphaOwner.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
 }

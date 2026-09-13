@@ -10,8 +10,8 @@ const alpha = {
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("Login de acesso").fill(alpha.login);
-  await page.getByLabel("Senha").fill(alpha.password);
+  await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
+  await page.getByRole("textbox", { name: "Senha" }).fill(alpha.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -33,6 +33,17 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
+  test("dedicated login presents authentication directly", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Acesse sua operação" })).toBeVisible();
+    await expect(page.getByLabel("Usuário ou e-mail")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Senha" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
+    await expect(page.getByText("BravHAS", { exact: false }).first()).toBeVisible();
+  });
+
   test("security headers are emitted on application responses", async ({ page }) => {
     const response = await page.request.get("/login");
     expect(response.ok()).toBe(true);
@@ -72,8 +83,8 @@ test.describe("authenticated session lifecycle", () => {
 
   test("invalid login is rejected without creating authenticated session", async ({ page, context }) => {
     await page.goto("/login");
-    await page.getByLabel("Login de acesso").fill(alpha.login);
-    await page.getByLabel("Senha").fill("invalid-password-value");
+    await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
+    await page.getByRole("textbox", { name: "Senha" }).fill("invalid-password-value");
     await page.getByRole("button", { name: "Entrar" }).click();
 
     await expect(page.getByText("Login ou senha inválidos.")).toBeVisible();
