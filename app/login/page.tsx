@@ -229,6 +229,14 @@ export default function LoginPage() {
     }
   }, [authenticated, loading, router]);
 
+  useEffect(() => {
+    if (loading || authenticated || window.location.hash !== "#login") {
+      return;
+    }
+
+    document.getElementById("login")?.scrollIntoView({ block: "start" });
+  }, [authenticated, loading]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -342,7 +350,7 @@ export default function LoginPage() {
         </div>
       </section>
 
-      <section id="login" className="bg-[#F7F9FC] py-16 sm:py-20">
+      <section id="login" className="scroll-mt-20 bg-[#F7F9FC] py-16 sm:py-20">
         <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:px-8">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3B91C8]">Acesso de clientes</p>
