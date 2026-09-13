@@ -10,7 +10,7 @@ const alpha = {
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("Login de acesso").fill(alpha.login);
+  await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
   await page.getByLabel("Senha").fill(alpha.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
@@ -33,6 +33,23 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
+  test("commercial entry presents BravHAS before requesting credentials", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(
+      page.getByRole("heading", {
+        name: "Controle administrativo real para financeiro, pessoas e obrigações.",
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Conhecer o BravHAS" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acesse sua operação" })).toBeVisible();
+    await expect(page.getByLabel("Usuário ou e-mail")).toBeVisible();
+    await expect(page.getByLabel("Senha")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mais soluções para sua empresa." })).toBeVisible();
+    await expect(page.getByText("BravAcademy", { exact: true })).toBeVisible();
+    await expect(page.getByText("BravOS", { exact: true })).toBeVisible();
+  });
+
   test("security headers are emitted on application responses", async ({ page }) => {
     const response = await page.request.get("/login");
     expect(response.ok()).toBe(true);
@@ -72,7 +89,7 @@ test.describe("authenticated session lifecycle", () => {
 
   test("invalid login is rejected without creating authenticated session", async ({ page, context }) => {
     await page.goto("/login");
-    await page.getByLabel("Login de acesso").fill(alpha.login);
+    await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
     await page.getByLabel("Senha").fill("invalid-password-value");
     await page.getByRole("button", { name: "Entrar" }).click();
 
