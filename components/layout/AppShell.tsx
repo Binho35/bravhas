@@ -64,9 +64,9 @@ export function AppShell({
   }, [mobileMenuOpen]);
 
   return (
-    <div className="h-dvh overflow-hidden bg-[#F7F9FC] text-[#0F172A]">
+    <div className="h-dvh overflow-hidden bg-[#F3F6FA] text-[#102A43]">
       <div className="flex h-full">
-        <aside className="hidden h-full w-64 shrink-0 bg-[#0B2947] lg:block">
+        <aside className="hidden h-full w-72 shrink-0 bg-[#081F35] lg:block">
           {sidebar}
         </aside>
 
@@ -75,7 +75,7 @@ export function AppShell({
             <button
               type="button"
               aria-label="Fechar menu de navegação"
-              className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]"
+              className="absolute inset-0 bg-[#071827]/60 backdrop-blur-[2px]"
               onClick={() => setMobileMenuOpen(false)}
             />
 
@@ -85,14 +85,14 @@ export function AppShell({
               role="dialog"
               aria-modal="true"
               aria-label="Navegação principal"
-              className="relative h-full w-[min(20rem,88vw)] bg-[#0B2947] shadow-2xl"
+              className="relative h-full w-[min(19rem,86vw)] overflow-hidden bg-[#081F35] shadow-[24px_0_70px_-30px_rgba(2,12,22,0.85)]"
             >
               <button
                 ref={closeButtonRef}
                 type="button"
                 aria-label="Fechar menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               >
                 <X size={20} aria-hidden="true" />
               </button>
@@ -102,7 +102,7 @@ export function AppShell({
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="relative h-16 shrink-0 border-b border-[#E2E8F0] bg-white">
+          <header className="relative h-[72px] shrink-0 border-b border-[#DDE6EE] bg-white/95 backdrop-blur-sm">
             <button
               ref={menuTriggerRef}
               type="button"
@@ -110,7 +110,7 @@ export function AppShell({
               aria-expanded={mobileMenuOpen}
               aria-controls={navigationId}
               onClick={() => setMobileMenuOpen(true)}
-              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#154B7A] shadow-sm transition hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154B7A]/30 lg:hidden"
+              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl border border-[#DCE6F0] bg-white text-[#154B7A] shadow-sm transition hover:bg-[#F5F8FB] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2C7DB6]/15 lg:hidden"
             >
               <Menu size={20} aria-hidden="true" />
             </button>
