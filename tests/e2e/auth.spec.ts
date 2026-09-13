@@ -11,7 +11,7 @@ const alpha = {
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
-  await page.getByLabel("Senha").fill(alpha.password);
+  await page.getByRole("textbox", { name: "Senha" }).fill(alpha.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -44,7 +44,7 @@ test.describe("authenticated session lifecycle", () => {
     await expect(page.getByRole("link", { name: "Conhecer o BravHAS" }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Acesse sua operação" })).toBeVisible();
     await expect(page.getByLabel("Usuário ou e-mail")).toBeVisible();
-    await expect(page.getByLabel("Senha")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Senha" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Mais soluções para sua empresa." })).toBeVisible();
     await expect(page.getByText("BravAcademy", { exact: true })).toBeVisible();
     await expect(page.getByText("BravOS", { exact: true })).toBeVisible();
@@ -90,7 +90,7 @@ test.describe("authenticated session lifecycle", () => {
   test("invalid login is rejected without creating authenticated session", async ({ page, context }) => {
     await page.goto("/login");
     await page.getByLabel("Usuário ou e-mail").fill(alpha.login);
-    await page.getByLabel("Senha").fill("invalid-password-value");
+    await page.getByRole("textbox", { name: "Senha" }).fill("invalid-password-value");
     await page.getByRole("button", { name: "Entrar" }).click();
 
     await expect(page.getByText("Login ou senha inválidos.")).toBeVisible();
