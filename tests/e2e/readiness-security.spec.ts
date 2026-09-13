@@ -11,7 +11,7 @@ const beta = {
 
 async function loginAsBetaOwner(page: Parameters<typeof loginAsAlphaOwner>[0]) {
   await page.goto("/login");
-  await page.getByLabel("Login de acesso").fill(e2eUsers.betaOwner.login);
+  await page.getByLabel("Usuário ou e-mail").fill(e2eUsers.betaOwner.login);
   await page.getByLabel("Senha").fill(e2eUsers.betaOwner.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
