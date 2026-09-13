@@ -8,7 +8,7 @@ const fixture = {
 async function login(page: Page, loginId: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Usuário ou e-mail").fill(loginId);
-  await page.getByLabel("Senha").fill(password);
+  await page.getByRole("textbox", { name: "Senha" }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
