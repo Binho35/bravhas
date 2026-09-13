@@ -33,21 +33,15 @@ function mutateServerSession(action: "revoke" | "expire", token: string) {
 }
 
 test.describe("authenticated session lifecycle", () => {
-  test("commercial entry presents BravHAS before requesting credentials", async ({ page }) => {
+  test("dedicated login presents authentication directly", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(
-      page.getByRole("heading", {
-        name: "Controle administrativo real para financeiro, pessoas e obrigações.",
-      }),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Conhecer o BravHAS" }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole("heading", { name: "Acesse sua operação" })).toBeVisible();
     await expect(page.getByLabel("Usuário ou e-mail")).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Senha" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Mais soluções para sua empresa." })).toBeVisible();
-    await expect(page.getByText("BravAcademy", { exact: true })).toBeVisible();
-    await expect(page.getByText("BravOS", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
+    await expect(page.getByText("BravHAS", { exact: false }).first()).toBeVisible();
   });
 
   test("security headers are emitted on application responses", async ({ page }) => {
