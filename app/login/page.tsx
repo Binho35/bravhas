@@ -15,11 +15,51 @@ import {
 
 import { useAuth } from "@/modules/auth/hooks/useAuth";
 
+
+function BravSystemsSignature() {
+  return (
+    <div
+      data-bravsystems-signature
+      style={{
+        marginTop: 20,
+        border: "1px solid rgba(148,163,184,.28)",
+        borderRadius: 16,
+        padding: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        background: "rgba(248,250,252,.72)",
+      }}
+    >
+      <span
+        role="img"
+        aria-label="Harpia, mascote oficial da BravSystems"
+        style={{
+          width: 44,
+          height: 44,
+          flex: "0 0 44px",
+          borderRadius: 12,
+          backgroundColor: "#082844",
+          backgroundImage: "url('/bravsystems-harpia.png')",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center",
+          backgroundSize: "contain",
+        }}
+      />
+      <div style={{ minWidth: 0, fontSize: 11, lineHeight: 1.45, color: "#64748b" }}>
+        <strong style={{ color: "#0f2942" }}>Robson</strong> · Founder & CEO
+        <br />
+        <strong style={{ color: "#0f2942" }}>Harpia</strong> · Mascote oficial da BravSystems
+      </div>
+    </div>
+  );
+}
+
 function BravHasWordmark() {
   return (
     <div>
       <div className="text-xl font-black tracking-[-0.045em] text-[#102A43]">
-        Brav<span className="text-[#3699CD]">HAS</span>
+        Brav<span className="text-[#3699CD]">Has</span>
       </div>
       <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#7A8E9F]">
         by BravSystems
@@ -70,7 +110,7 @@ export default function LoginPage() {
 
   return (
     <main className="bravhas-login-shell">
-      <section className="bravhas-login-editorial" aria-label="BravHAS">
+      <section className="bravhas-login-editorial" aria-label="BravHas">
         <div className="bravhas-login-editorial-brand">
           <div className="bravhas-login-logo-mark">H</div>
           <BravHasWordmark />
@@ -200,6 +240,7 @@ export default function LoginPage() {
             <ShieldCheck size={14} aria-hidden="true" />
             <span>Permissões, sessão e contexto protegidos.</span>
           </div>
+          <BravSystemsSignature />
         </div>
       </section>
     </main>
