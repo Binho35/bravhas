@@ -9,8 +9,6 @@ import { parseCurrencyInput } from "../utils/currency";
 interface FinancialActionsProps {
   account: FinancialAccountView;
 
-  total: number;
-
   remaining: number;
 
   onAccountUpdated: (
@@ -77,7 +75,6 @@ async function callFinancialApi(
 
 export function FinancialActions({
   account,
-  total,
   remaining,
   onAccountUpdated,
 }: FinancialActionsProps) {
@@ -184,9 +181,6 @@ export function FinancialActions({
 
               amount:
                 value,
-
-              paidBy:
-                "Robson",
             },
           );
 
@@ -212,9 +206,6 @@ export function FinancialActions({
 
               amount:
                 value,
-
-              receivedBy:
-                "Robson",
             },
           );
 
@@ -284,9 +275,6 @@ export function FinancialActions({
 
               amount:
                 remaining,
-
-              paidBy:
-                "Robson",
             },
           );
 
@@ -310,9 +298,6 @@ export function FinancialActions({
 
               amount:
                 remaining,
-
-              receivedBy:
-                "Robson",
             },
           );
 
@@ -368,9 +353,6 @@ export function FinancialActions({
           {
             accountId:
               account.id,
-
-            canceledBy:
-              "Robson",
           },
         );
 
@@ -434,9 +416,6 @@ export function FinancialActions({
 
             amount:
               parsedValue,
-
-            reversedBy:
-              "Robson",
           },
         );
 

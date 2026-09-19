@@ -66,7 +66,7 @@ export default function NovaContaFinanceiraPage() {
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">Financeiro</p>
               <h2 className="mt-1 text-2xl font-bold text-[#0B2947]">Nova Conta Financeira</h2>
-              <p className="mt-1 text-sm text-[#64748B]">Cadastre contas a pagar ou receber com persistência no BravHAS.</p>
+              <p className="mt-1 text-sm text-[#64748B]">Cadastre contas a pagar ou receber com persistência no BravHas.</p>
             </div>
             <button type="button" onClick={() => router.push("/financeiro")} className="rounded-xl border border-[#E2E8F0] bg-white px-4 py-2 text-sm font-semibold text-[#475569]">Voltar</button>
           </section>

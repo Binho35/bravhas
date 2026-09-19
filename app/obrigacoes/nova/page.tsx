@@ -109,7 +109,7 @@ export default function NewObligationPage() {
               </div>
             </div>
             <div className="grid min-h-0 grid-rows-[1fr_auto] gap-4">
-              <div className="rounded-2xl bg-[#0B2947] p-5 text-white shadow-sm"><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Regra BravHAS</p><h3 className="mt-2 text-lg font-bold">Controle completo</h3><p className="mt-3 text-sm leading-6 text-white/70">Toda obrigação deve possuir responsável, prazo, prioridade e acompanhamento persistente.</p></div>
+              <div className="rounded-2xl bg-[#0B2947] p-5 text-white shadow-sm"><p className="text-[10px] font-semibold tracking-[0.18em] text-white/45">Regra BravHas</p><h3 className="mt-2 text-lg font-bold">Controle completo</h3><p className="mt-3 text-sm leading-6 text-white/70">Toda obrigação deve possuir responsável, prazo, prioridade e acompanhamento persistente.</p></div>
               <div className="flex gap-3"><button type="button" onClick={() => router.push("/obrigacoes")} className="h-10 flex-1 rounded-xl border border-[#E2E8F0] bg-white text-sm font-semibold text-[#475569]">Cancelar</button><button disabled={saving} type="submit" className="h-10 flex-1 rounded-xl bg-[#154B7A] text-sm font-semibold text-white disabled:opacity-50">{saving ? "Salvando..." : "Salvar obrigação"}</button></div>
             </div>
           </section>

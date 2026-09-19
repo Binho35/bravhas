@@ -50,42 +50,45 @@ export function Header() {
   }
 
   return (
-    <div className="flex h-full min-w-0 items-center justify-between gap-2 bg-white px-3 sm:px-5">
+    <div className="bravhas-header flex h-full min-w-0 items-center justify-between gap-3 px-3 sm:px-5">
       <div className="min-w-0">
         <div className="hidden items-center gap-2 sm:flex">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#3B91C8]">
-            BravHAS • by BravSystems
-          </p>
-          <span className="h-1 w-1 rounded-full bg-[#CBD5E1]" />
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#64748B]">
+          <span className="bravhas-header-kicker">Centro executivo</span>
+          <span className="h-1 w-1 rounded-full bg-[#C6D6E1]" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#73889A]">
             <ShieldCheck size={11} aria-hidden="true" />
-            Operação autenticada
+            Sessão protegida
           </span>
         </div>
-        <h1 className="truncate text-sm font-black tracking-tight text-[#0B2947] sm:mt-0.5 sm:text-base">
+        <h1 className="mt-0.5 truncate text-[15px] font-black tracking-[-0.025em] text-[#102A43] sm:text-[17px]">
           Centro de Controle
         </h1>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <div className="hidden max-w-48 text-right sm:block">
-          <p className="truncate text-xs font-bold text-[#0F172A]">{user?.name ?? "Usuário"}</p>
-          <p className="truncate text-[11px] font-medium text-[#94A3B8]">{getRoleLabel(user?.role)}</p>
-        </div>
-
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#CFE5F4] bg-[#EAF3FB] text-xs font-black text-[#154B7A]"
-          aria-label={`Usuário ${user?.name ?? "Usuário"}`}
-          role="img"
-        >
-          {getInitials(user?.name ?? "Usuário")}
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="bravhas-user-chip hidden sm:flex">
+          <div className="min-w-0 text-right">
+            <p className="truncate text-xs font-black text-[#173A54]">
+              {user?.name ?? "Usuário"}
+            </p>
+            <p className="truncate text-[10px] font-semibold text-[#8295A5]">
+              {getRoleLabel(user?.role)}
+            </p>
+          </div>
+          <div
+            className="bravhas-user-avatar"
+            aria-label={`Usuário ${user?.name ?? "Usuário"}`}
+            role="img"
+          >
+            {getInitials(user?.name ?? "Usuário")}
+          </div>
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
           disabled={signingOut}
-          className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 text-xs font-bold text-[#475569] transition hover:border-red-200 hover:bg-red-50 hover:text-[#DC2626] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154B7A]/30 disabled:cursor-wait disabled:opacity-60"
+          className="bravhas-logout-button"
           aria-label={signingOut ? "Saindo do BravHAS" : "Sair do BravHAS"}
           title="Sair do BravHAS"
         >

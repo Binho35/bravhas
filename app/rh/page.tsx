@@ -14,7 +14,7 @@ export default function RhPage() {
     <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-7xl">
         <header>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">BravHAS Pessoas</p>
+          <p className="text-sm font-semibold tracking-[0.18em] text-blue-700">BravHas Pessoas</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">RH</h1>
           <p className="mt-2 max-w-2xl text-slate-600">Gestão de pessoas, desenvolvimento, comunicação e experiência do colaborador.</p>
         </header>

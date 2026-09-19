@@ -313,9 +313,6 @@ export default function FinancialAccountPage() {
                 account={
                   account
                 }
-                total={
-                  total
-                }
                 remaining={
                   remaining
                 }

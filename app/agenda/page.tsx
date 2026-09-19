@@ -136,7 +136,7 @@ export default function AgendaPage() {
         <OperationalModulePage
           eyebrow="Operação"
           title="Agenda"
-          description="Compromissos, vencimentos e histórico das obrigações administrativas do BravHAS."
+          description="Compromissos, vencimentos e histórico das obrigações administrativas do BravHas."
           statusText="Agenda integrada às Obrigações"
         >
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">

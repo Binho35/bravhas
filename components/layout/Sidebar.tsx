@@ -133,20 +133,26 @@ export function Sidebar() {
     .filter((section) => section.items.length > 0);
 
   return (
-    <div className="flex h-full flex-col bg-[#0B2947] text-white">
-      <div className="border-b border-white/10 px-6 py-6 pr-16 lg:pr-6">
-        <h1 className="text-2xl font-black tracking-[-0.04em]">
-          Brav<span className="text-[#8CC4EA]">HAS</span>
-        </h1>
-        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/45">by BravSystems</p>
+    <div className="bravhas-sidebar flex h-full flex-col">
+      <div className="bravhas-sidebar-brand">
+        <div className="bravhas-sidebar-mark">H</div>
+        <div>
+          <h1>
+            Brav<span>HAS</span>
+          </h1>
+          <p>by BravSystems</p>
+        </div>
       </div>
 
-      <nav aria-label="Navegação principal" className="flex-1 overflow-auto px-3 py-4">
+      <div className="bravhas-sidebar-context">
+        <span>Head Administration System</span>
+        <strong>Gestão administrativa integrada</strong>
+      </div>
+
+      <nav aria-label="Navegação principal" className="bravhas-sidebar-nav">
         {visibleSections.map((section) => (
-          <div key={section.title} className="mb-6">
-            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-              {section.title}
-            </p>
+          <div key={section.title} className="bravhas-sidebar-section">
+            <p className="bravhas-sidebar-section-title">{section.title}</p>
 
             <div className="space-y-1">
               {section.items.map((item) => {
@@ -161,13 +167,11 @@ export function Sidebar() {
                     key={item.label}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                      active
-                        ? "bg-[#154B7A] text-white shadow-sm"
-                        : "text-white/72 hover:bg-white/5 hover:text-white"
-                    }`}
+                    className={`bravhas-sidebar-link ${active ? "is-active" : ""}`}
                   >
-                    <Icon size={18} aria-hidden="true" />
+                    <span className="bravhas-sidebar-icon">
+                      <Icon size={17} aria-hidden="true" />
+                    </span>
                     <span>{item.label}</span>
                   </Link>
                 );
@@ -177,13 +181,15 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-white/10 p-4">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div className="flex items-center gap-2 text-[#8CC4EA]">
-            <ShieldCheck size={15} aria-hidden="true" />
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em]">Ambiente administrativo</p>
+      <div className="bravhas-sidebar-footer">
+        <div className="bravhas-security-card">
+          <span className="bravhas-security-icon">
+            <ShieldCheck size={16} aria-hidden="true" />
+          </span>
+          <div>
+            <strong>Ambiente protegido</strong>
+            <p>Permissões e contexto por organização.</p>
           </div>
-          <p className="mt-2 text-[11px] leading-5 text-white/55">Acesso orientado por permissões e contexto da organização.</p>
         </div>
       </div>
     </div>
