@@ -1129,3 +1129,430 @@ body {
     border-radius: 22px;
   }
 }
+
+/* ===========================
+   PEOPLE + LEGACY UI CONVERGENCE
+=========================== */
+.bravhas-people-shell {
+  background:
+    radial-gradient(circle at 94% 0%, rgba(74, 173, 226, 0.08), transparent 28%),
+    #f4f8fb;
+  color: #10243a;
+}
+
+.bravhas-people-sidebar,
+.bravhas-people-drawer {
+  border-right: 1px solid #dce7ef;
+  background:
+    radial-gradient(circle at 28% 0%, rgba(78, 178, 222, 0.08), transparent 25%),
+    #ffffff;
+  color: #17364e;
+}
+
+.bravhas-people-sidebar {
+  box-shadow: 8px 0 30px rgba(16, 42, 67, 0.035);
+}
+
+.bravhas-people-brand {
+  padding: 22px 18px 14px;
+}
+
+.bravhas-people-brandmark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #3fa9dc, #267eaf);
+  color: white;
+  box-shadow: 0 10px 24px rgba(39, 126, 175, 0.16);
+}
+
+.bravhas-people-brand strong {
+  display: block;
+  color: #102a43;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.bravhas-people-brand strong span {
+  color: #3799cd;
+}
+
+.bravhas-people-brand small {
+  display: block;
+  margin-top: 1px;
+  color: #8296a5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.bravhas-people-context {
+  margin: 0 12px 16px;
+  padding: 12px 13px;
+  border: 1px solid #e1eaf0;
+  border-radius: 15px;
+  background: #f7fbfd;
+}
+
+.bravhas-people-context span,
+.bravhas-people-context strong {
+  display: block;
+}
+
+.bravhas-people-context span {
+  color: #8aa0af;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bravhas-people-context strong {
+  margin-top: 4px;
+  color: #33536a;
+  font-size: 11px;
+}
+
+.bravhas-people-nav-section > p {
+  padding: 0 10px;
+  color: #98a8b5;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bravhas-people-nav-link {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: #5d7486;
+  font-size: 12px;
+  font-weight: 720;
+  transition: 150ms ease;
+}
+
+.bravhas-people-nav-link:hover {
+  background: #f5f9fb;
+  color: #244b65;
+}
+
+.bravhas-people-nav-link.is-active {
+  border-color: #d5eaf5;
+  background: linear-gradient(145deg, #edf8fd, #e6f4fb);
+  color: #1d6f9b;
+  box-shadow: inset 3px 0 0 #47a9d8;
+}
+
+.bravhas-people-nav-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: #f3f8fa;
+  color: #7890a1;
+}
+
+.bravhas-people-nav-link.is-active .bravhas-people-nav-icon {
+  background: rgba(255,255,255,.82);
+  color: #2f91c1;
+}
+
+.bravhas-people-sidebar-footer {
+  border-top: 1px solid #e5edf2;
+  padding: 12px;
+}
+
+.bravhas-people-back-link {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: #557084;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bravhas-people-back-link:hover {
+  background: #f4f8fa;
+  color: #247daa;
+}
+
+.bravhas-people-security {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 11px;
+  border-radius: 13px;
+  background: #f7fafc;
+  color: #438d65;
+}
+
+.bravhas-people-security span,
+.bravhas-people-security strong,
+.bravhas-people-security small {
+  display: block;
+}
+
+.bravhas-people-security strong {
+  color: #3c5b70;
+  font-size: 10px;
+}
+
+.bravhas-people-security small {
+  margin-top: 2px;
+  color: #8b9ca8;
+  font-size: 9px;
+}
+
+.bravhas-people-topbar {
+  border-bottom: 1px solid #dfe8ef;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 6px 24px rgba(16,42,67,.035);
+  backdrop-filter: blur(16px);
+}
+
+.bravhas-people-profile {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  border: 1px solid #dfe8ef;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.bravhas-people-profile > span {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border-radius: 10px;
+  background: #eaf6fc;
+  color: #277eaf;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.bravhas-people-profile strong,
+.bravhas-people-profile small {
+  display: block;
+}
+
+.bravhas-people-profile strong {
+  color: #29485f;
+  font-size: 10px;
+}
+
+.bravhas-people-profile small {
+  color: #90a0ac;
+  font-size: 9px;
+}
+
+.bravhas-people-content {
+  min-height: calc(100vh - 70px);
+}
+
+/* Mapeia a paleta antiga para o design system atual em todas as áreas autenticadas. */
+body [class*="text-[#0B2947]"],
+body [class*="text-[#0b2947]"] {
+  color: #102a43 !important;
+}
+
+body [class*="text-[#154B7A]"],
+body [class*="text-[#154b7a]"] {
+  color: #277eaf !important;
+}
+
+body [class*="text-[#103D65]"],
+body [class*="text-[#103d65]"] {
+  color: #1e6b96 !important;
+}
+
+body [class*="text-[#0F172A]"],
+body [class*="text-[#0f172a]"] {
+  color: #18364d !important;
+}
+
+body [class*="text-[#475569]"] {
+  color: #536d80 !important;
+}
+
+body [class*="text-[#64748B]"],
+body [class*="text-[#64748b]"] {
+  color: #6f8394 !important;
+}
+
+body [class*="text-[#94A3B8]"],
+body [class*="text-[#94a3b8]"] {
+  color: #91a1ad !important;
+}
+
+body [class*="border-[#E2E8F0]"],
+body [class*="border-[#e2e8f0]"] {
+  border-color: #dce7ef !important;
+}
+
+body [class*="border-[#F1F5F9]"],
+body [class*="border-[#f1f5f9]"] {
+  border-color: #eaf0f4 !important;
+}
+
+body [class*="bg-[#F7F9FC]"],
+body [class*="bg-[#f7f9fc]"] {
+  background-color: #f4f8fb !important;
+}
+
+body [class*="bg-[#F8FAFC]"],
+body [class*="bg-[#f8fafc]"] {
+  background-color: #f7fafc !important;
+}
+
+body [class*="bg-[#EAF3FB]"],
+body [class*="bg-[#eaf3fb]"],
+body [class*="bg-[#EFF6FF]"],
+body [class*="bg-[#eff6ff]"] {
+  background-color: #eaf6fc !important;
+}
+
+body [class*="bg-[#154B7A]"],
+body [class*="bg-[#154b7a]"] {
+  background: linear-gradient(135deg, #3b9bc8, #277eaf) !important;
+}
+
+body [class*="bg-[#0B2947]"],
+body [class*="bg-[#0b2947]"] {
+  background: linear-gradient(145deg, #183a52, #102a43) !important;
+}
+
+body [class*="hover:bg-[#103D65]"]:hover,
+body [class*="hover:bg-[#103d65]"]:hover {
+  background: #1e6b96 !important;
+}
+
+body [class*="hover:bg-[#F8FAFC]"]:hover,
+body [class*="hover:bg-[#f8fafc]"]:hover {
+  background: #f4f8fb !important;
+}
+
+body [class*="rounded-2xl"][class*="border"][class*="bg-white"] {
+  border-color: #dce7ef !important;
+  box-shadow: 0 9px 26px rgba(16,42,67,.04) !important;
+}
+
+body input:not([type="checkbox"]):not([type="radio"]),
+body select,
+body textarea {
+  border-color: #cbdbe5;
+}
+
+body input:not([type="checkbox"]):not([type="radio"]):focus,
+body select:focus,
+body textarea:focus {
+  border-color: #55add7 !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(85,173,215,.1);
+}
+
+body table thead {
+  background: #f7fafc;
+}
+
+body table th {
+  color: #8195a4;
+}
+
+@media (max-width: 640px) {
+  .bravhas-people-content [class*="p-6"],
+  .bravhas-people-content [class*="p-8"] {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  body [class*="rounded-2xl"] {
+    border-radius: 16px !important;
+  }
+}
+
+.bravhas-module-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid #dce7ef;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(74,173,226,.09), transparent 28%),
+    linear-gradient(145deg, #ffffff, #f7fbfd);
+  box-shadow: 0 10px 28px rgba(16,42,67,.04);
+}
+
+.bravhas-module-eyebrow {
+  color: #4798c2;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.bravhas-module-hero h2 {
+  margin-top: 5px;
+  color: #102a43;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+}
+
+.bravhas-module-hero > div:first-child > p:last-child {
+  max-width: 760px;
+  margin-top: 6px;
+  color: #6c8191;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.bravhas-module-status {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid #d3e9f4;
+  border-radius: 999px;
+  background: #edf8fd;
+  color: #277eaf;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .bravhas-module-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .bravhas-module-hero h2 {
+    font-size: 23px;
+  }
+
+  .bravhas-module-status {
+    width: fit-content;
+  }
+}

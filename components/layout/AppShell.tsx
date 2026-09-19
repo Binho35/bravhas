@@ -24,6 +24,7 @@ export function AppShell({
     if (!mobileMenuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    const menuTrigger = menuTriggerRef.current;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
 
@@ -59,7 +60,7 @@ export function AppShell({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
-      menuTriggerRef.current?.focus();
+      menuTrigger?.focus();
     };
   }, [mobileMenuOpen]);
 
