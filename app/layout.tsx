@@ -35,7 +35,7 @@ const geistMono =
 
 export const metadata: Metadata = {
   title:
-    "BravHAS | Head Administration System",
+    "BravHas | Head Administration System",
 
   description:
     "Sistema de administração e gestão executiva.",
