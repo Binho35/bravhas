@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CircleDollarSign,
+  ClipboardCheck,
+  TrendingUp,
+  WalletCards,
+} from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Header } from "@/components/layout/Header";
@@ -193,60 +201,160 @@ export default function Home() {
     return difference >= 0 && difference <= 7;
   });
 
+  const kpis = [
+    {
+      label: "Contas a pagar",
+      value: formatCurrency(totalPayable),
+      detail: `${payableAccounts.length} em aberto`,
+      icon: WalletCards,
+      tone: "danger",
+    },
+    {
+      label: "Contas a receber",
+      value: formatCurrency(totalReceivable),
+      detail: `${receivableAccounts.length} em aberto`,
+      icon: CircleDollarSign,
+      tone: "success",
+    },
+    {
+      label: "Obrigações críticas",
+      value: String(criticalItems.length),
+      detail: "Prioridade crítica",
+      icon: AlertTriangle,
+      tone: "warning",
+    },
+    {
+      label: "Próximos 7 dias",
+      value: String(nextSevenDays.length),
+      detail: "Obrigações com vencimento",
+      icon: CalendarClock,
+      tone: "info",
+    },
+  ];
+
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
-      <div className="h-full overflow-auto p-3 sm:p-5">
-        <div className="mx-auto w-full max-w-[1600px]">
-          <section className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="bravhas-dashboard h-full overflow-auto">
+        <div className="mx-auto w-full max-w-[1560px]">
+          <section className="bravhas-dashboard-hero">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94A3B8]">Visão Executiva</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0B2947]">Dashboard</h2>
-              <p className="mt-1 text-sm text-[#64748B]">Resumo consolidado de obrigações e financeiro.</p>
+              <span className="bravhas-dashboard-eyebrow">Visão Executiva</span>
+              <h2>Dashboard</h2>
+              <p>
+                Financeiro, obrigações e pessoas reunidos em uma leitura objetiva da operação administrativa.
+              </p>
             </div>
-            <div className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 shadow-sm sm:w-auto sm:text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94A3B8]">Itens de atenção</p>
-              <p className="mt-1 text-xl font-bold text-[#DC2626]">{totalAttentionItems}</p>
-            </div>
-          </section>
 
-          {loading && <div className="mb-4 rounded-xl border border-[#E2E8F0] bg-white p-4 text-sm text-[#64748B]" role="status">Carregando indicadores...</div>}
-          {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-[#DC2626]" role="alert">{error}</div>}
-
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores principais">
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"><p className="text-xs text-[#64748B]">Contas a pagar</p><p className="mt-2 break-words text-xl font-bold text-[#DC2626]">{formatCurrency(totalPayable)}</p><p className="mt-1 text-[10px] text-[#94A3B8]">{payableAccounts.length} em aberto</p></div>
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"><p className="text-xs text-[#64748B]">Contas a receber</p><p className="mt-2 break-words text-xl font-bold text-[#16A34A]">{formatCurrency(totalReceivable)}</p><p className="mt-1 text-[10px] text-[#94A3B8]">{receivableAccounts.length} em aberto</p></div>
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"><p className="text-xs text-[#64748B]">Obrigações críticas</p><p className="mt-2 text-xl font-bold text-[#DC2626]">{criticalItems.length}</p><p className="mt-1 text-[10px] text-[#94A3B8]">Prioridade crítica</p></div>
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"><p className="text-xs text-[#64748B]">Próximos 7 dias</p><p className="mt-2 text-xl font-bold text-[#154B7A]">{nextSevenDays.length}</p><p className="mt-1 text-[10px] text-[#94A3B8]">Obrigações com vencimento</p></div>
-          </section>
-
-          <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-bold text-[#0B2947]">Atenções prioritárias</h3>
-              <div className="mt-3 space-y-2">
-                {attentionItems.slice(0, 8).map((item) => (
-                  <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-[#F1F5F9] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0"><p className="break-words text-sm font-semibold text-[#0F172A]">{item.title}</p><p className="text-[11px] text-[#94A3B8]">{areaLabels[item.area]} • {item.responsibleName}</p></div>
-                    <div className="shrink-0 sm:text-right"><p className="text-xs font-bold text-[#D97706]">{item.priority === "CRITICAL" ? "Crítica" : "Alta"}</p><p className="text-[10px] text-[#94A3B8]">{formatDeadline(item.dueDate, referenceDate)}</p></div>
-                  </div>
-                ))}
-                {attentionItems.length === 0 && <p className="text-sm text-[#64748B]">Nenhuma obrigação prioritária pendente.</p>}
+            <div className="bravhas-attention-card" data-clear={totalAttentionItems === 0}>
+              <span>
+                {totalAttentionItems === 0 ? (
+                  <ClipboardCheck size={18} aria-hidden="true" />
+                ) : (
+                  <AlertTriangle size={18} aria-hidden="true" />
+                )}
+              </span>
+              <div>
+                <small>Itens de atenção</small>
+                <strong>{totalAttentionItems}</strong>
               </div>
             </div>
+          </section>
 
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-bold text-[#0B2947]">Saúde por área</h3>
-              <div className="mt-4 space-y-4">
+          {loading && (
+            <div className="bravhas-feedback mt-4" role="status">
+              Carregando indicadores...
+            </div>
+          )}
+          {error && (
+            <div className="bravhas-feedback bravhas-feedback-error mt-4" role="alert">
+              {error}
+            </div>
+          )}
+
+          <section className="bravhas-kpi-grid" aria-label="Indicadores principais">
+            {kpis.map(({ icon: Icon, ...item }) => (
+              <article className="bravhas-kpi-card" data-tone={item.tone} key={item.label}>
+                <div className="bravhas-kpi-icon">
+                  <Icon size={19} aria-hidden="true" />
+                </div>
+                <div>
+                  <p>{item.label}</p>
+                  <strong>{item.value}</strong>
+                  <small>{item.detail}</small>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="bravhas-dashboard-grid">
+            <article className="bravhas-executive-panel">
+              <header className="bravhas-panel-heading">
+                <div>
+                  <span>Acompanhamento</span>
+                  <h3>Atenções prioritárias</h3>
+                </div>
+                <p>{attentionItems.length} obrigação{attentionItems.length === 1 ? "" : "ões"}</p>
+              </header>
+
+              <div className="bravhas-priority-list">
+                {attentionItems.slice(0, 8).map((item) => (
+                  <div key={item.id} className="bravhas-priority-row">
+                    <span className="bravhas-priority-marker" data-critical={item.priority === "CRITICAL"} />
+                    <div className="min-w-0 flex-1">
+                      <strong>{item.title}</strong>
+                      <small>{areaLabels[item.area]} · {item.responsibleName}</small>
+                    </div>
+                    <div className="bravhas-priority-deadline">
+                      <span>{item.priority === "CRITICAL" ? "Crítica" : "Alta"}</span>
+                      <small>{formatDeadline(item.dueDate, referenceDate)}</small>
+                    </div>
+                  </div>
+                ))}
+                {attentionItems.length === 0 && (
+                  <div className="bravhas-empty-state">
+                    <ClipboardCheck size={22} aria-hidden="true" />
+                    <div>
+                      <strong>Nenhuma prioridade crítica pendente.</strong>
+                      <p>As obrigações que exigirem atenção aparecerão aqui.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="bravhas-executive-panel">
+              <header className="bravhas-panel-heading">
+                <div>
+                  <span>Leitura executiva</span>
+                  <h3>Saúde por área</h3>
+                </div>
+                <TrendingUp size={19} className="text-[#4A9BC7]" aria-hidden="true" />
+              </header>
+
+              <div className="bravhas-health-list">
                 {monitoredAreas.map((item) => {
                   const health = calculateAreaHealth(obligations, item.area, referenceDate);
                   return (
-                    <div key={item.area}>
-                      <div className="flex items-center justify-between"><span className="text-xs font-semibold text-[#475569]">{item.name}</span><span className="text-xs font-bold text-[#154B7A]">{health}%</span></div>
-                      <div className="mt-1 h-2 rounded-full bg-[#EAF3FB]" role="progressbar" aria-label={`Saúde ${item.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={health}><div className="h-2 rounded-full bg-[#154B7A]" style={{ width: `${health}%` }} /></div>
+                    <div className="bravhas-health-row" key={item.area}>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{item.name}</span>
+                        <strong>{health}%</strong>
+                      </div>
+                      <div
+                        className="bravhas-health-track"
+                        role="progressbar"
+                        aria-label={`Saúde ${item.name}`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={health}
+                      >
+                        <span style={{ width: `${health}%` }} />
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </article>
           </section>
         </div>
       </div>

@@ -64,9 +64,9 @@ export function AppShell({
   }, [mobileMenuOpen]);
 
   return (
-    <div className="h-dvh overflow-hidden bg-[#F7F9FC] text-[#0F172A]">
+    <div className="bravhas-shell h-dvh overflow-hidden text-[#10243A]">
       <div className="flex h-full">
-        <aside className="hidden h-full w-64 shrink-0 bg-[#0B2947] lg:block">
+        <aside className="bravhas-desktop-sidebar hidden h-full w-[276px] shrink-0 lg:block">
           {sidebar}
         </aside>
 
@@ -75,7 +75,7 @@ export function AppShell({
             <button
               type="button"
               aria-label="Fechar menu de navegação"
-              className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]"
+              className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px]"
               onClick={() => setMobileMenuOpen(false)}
             />
 
@@ -85,16 +85,16 @@ export function AppShell({
               role="dialog"
               aria-modal="true"
               aria-label="Navegação principal"
-              className="relative h-full w-[min(20rem,88vw)] bg-[#0B2947] shadow-2xl"
+              className="bravhas-mobile-drawer relative h-full w-[min(20rem,88vw)] shadow-2xl"
             >
               <button
                 ref={closeButtonRef}
                 type="button"
                 aria-label="Fechar menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-xl border border-[#DCE7EF] bg-white text-[#36536A] transition hover:bg-[#F4F8FB] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AADE2]/30"
               >
-                <X size={20} aria-hidden="true" />
+                <X size={19} aria-hidden="true" />
               </button>
               {sidebar}
             </aside>
@@ -102,7 +102,7 @@ export function AppShell({
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="relative h-16 shrink-0 border-b border-[#E2E8F0] bg-white">
+          <header className="bravhas-topbar relative h-[70px] shrink-0">
             <button
               ref={menuTriggerRef}
               type="button"
@@ -110,9 +110,9 @@ export function AppShell({
               aria-expanded={mobileMenuOpen}
               aria-controls={navigationId}
               onClick={() => setMobileMenuOpen(true)}
-              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#154B7A] shadow-sm transition hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#154B7A]/30 lg:hidden"
+              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-[#DCE7EF] bg-white text-[#247DAF] shadow-sm transition hover:bg-[#F4F9FC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AADE2]/30 lg:hidden"
             >
-              <Menu size={20} aria-hidden="true" />
+              <Menu size={19} aria-hidden="true" />
             </button>
             <div className="h-full pl-14 lg:pl-0">{header}</div>
           </header>
