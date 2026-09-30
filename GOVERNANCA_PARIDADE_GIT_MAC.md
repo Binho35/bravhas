@@ -1,7 +1,7 @@
 # BravHas — Governança de Paridade Git ↔ Mac
 
 > Regra operacional permanente da BravSystems  
-> Instituída em: 24/09/2026  
+> Instituída em: 24/09/2026 · reforçada em 30/09/2026  
 > Proprietário: Robson  
 > Aplicação: desenvolvimento, homologação, documentação e continuidade entre chats/sessões.
 
@@ -202,25 +202,48 @@ Registrar:
 
 ---
 
-## 10. Quando o Mac estiver offline
+## 10. Quando o Mac estiver offline — GitHub-first
 
-É permitido:
+O Mac não é requisito para a continuidade do projeto.
 
-- pesquisar;
-- revisar documentação;
-- criar especificações;
-- registrar decisões no GitHub;
-- preparar arquitetura.
+Depois de uma reconciliação inicial que elimine qualquer dúvida sobre WIP local ainda não publicado, vale a regra permanente:
 
-Não editar código remoto usando uma versão antiga se houver indicação de que o Mac contém WIP mais novo.
+> **Se o Mac ficar offline, o desenvolvimento continua pelo GitHub sempre que a tarefa puder ser executada e validada com segurança sem depender do hardware local.**
+
+É permitido e esperado:
+
+- continuar código e documentação pela branch oficial;
+- revisar e corrigir implementações diretamente a partir do estado remoto;
+- executar checks, CI, Preview e outras validações remotas disponíveis;
+- registrar decisões e evidências no GitHub;
+- manter o HEAD remoto como estado durável mais recente do trabalho concluído.
+
+Não é permitido:
+
+- parar o projeto apenas porque o Mac está offline;
+- manter a evolução somente em memória, chat ou contexto;
+- tratar o Mac como fonte de verdade;
+- assumir que o Mac possui trabalho mais novo sem evidência.
+
+Exceção de segurança: se houver **evidência concreta** de WIP local ainda não publicado e potencialmente mais novo, preservar a dúvida até a reconciliação para evitar perda. Essa é uma exceção temporária, não o fluxo normal.
 
 Quando o Mac voltar:
 
-1. consultar o remoto;
-2. consultar o local;
-3. reconciliar;
-4. confirmar paridade;
-5. somente depois continuar desenvolvimento.
+1. consultar o HEAD remoto;
+2. consultar o estado local;
+3. preservar qualquer WIP local legítimo;
+4. reconciliar sem perda;
+5. sincronizar o Mac com o GitHub;
+6. revalidar;
+7. continuar com o GitHub igual ou à frente.
+
+A direção normal de recuperação é:
+
+```text
+GitHub -> Mac
+```
+
+e não o contrário. O Mac só prevalece temporariamente se existir WIP local comprovadamente legítimo que ainda precise ser preservado e publicado.
 
 ---
 
